@@ -785,14 +785,52 @@ function onFProductKey(e) {
   if (items[fcActiveIdx]) items[fcActiveIdx].scrollIntoView({ block:'nearest' });
 }
 
+// ── XHR helper ────────────────────────────────────────
+function xhrGet(url, onSlow) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = 60000; // 60s for GAS cold start
+    // Show slow-load message after 10s
+    const slowTimer = setTimeout(() => {
+      if (onSlow) onSlow();
+    }, 10000);
+    xhr.onload = () => {
+      clearTimeout(slowTimer);
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch(e) { reject(new Error('Invalid response: ' + xhr.responseText.slice(0, 80))); }
+    };
+    xhr.onerror   = () => { clearTimeout(slowTimer); reject(new Error('Network error')); };
+    xhr.ontimeout = () => { clearTimeout(slowTimer); reject(new Error('Server timed out — try again')); };
+    xhr.send();
+  });
+}
+
+async function safeFetch(url, retries = 2, onSlow) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const json = await xhrGet(url, i === 0 ? onSlow : null);
+      if (json.success) return json;
+      throw new Error(json.error || 'Server error');
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+}
+
 // ── Load ──────────────────────────────────────────────
 async function loadData() {
   document.getElementById('errBanner').style.display = 'none';
   setTableLoading();
   try {
-    const res  = await fetch(`${GAS_URL}?action=getDashboard`);
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'Server error');
+    const slowMsg = () => {
+      const eb = document.getElementById('errBanner');
+      eb.style.display = 'flex';
+      document.getElementById('errMsg').textContent = '⏳ GAS is starting up — please wait…';
+    };
+    const json = await safeFetch(`${GAS_URL}?action=getDashboard`, 2, slowMsg);
+    document.getElementById('errBanner').style.display = 'none';
     rawRows = json.rows;
     buildFilters();
     render();
