@@ -545,30 +545,32 @@
   document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
   // ── XHR helper: works reliably on mobile with GAS ────
-  function xhrGet(url) {
+  function xhrGet(url, onSlow) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
-      xhr.timeout = 30000;
+      xhr.timeout = 60000;
+      const slowTimer = setTimeout(() => { if (onSlow) onSlow(); }, 10000);
       xhr.onload  = () => {
+        clearTimeout(slowTimer);
         try { resolve(JSON.parse(xhr.responseText)); }
         catch(e) { reject(new Error('Parse error: ' + xhr.responseText.slice(0,80))); }
       };
-      xhr.onerror   = () => reject(new Error('Network error'));
-      xhr.ontimeout = () => reject(new Error('Request timed out'));
+      xhr.onerror   = () => { clearTimeout(slowTimer); reject(new Error('Network error')); };
+      xhr.ontimeout = () => { clearTimeout(slowTimer); reject(new Error('Server timed out — try again')); };
       xhr.send();
     });
   }
 
-  async function safeFetch(url, retries = 3) {
+  async function safeFetch(url, retries = 2, onSlow) {
     for (let i = 0; i < retries; i++) {
       try {
-        const json = await xhrGet(url);
+        const json = await xhrGet(url, i === 0 ? onSlow : null);
         if (json.success) return json;
         throw new Error(json.error || 'Server error');
       } catch (err) {
         if (i === retries - 1) throw err;
-        await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+        await new Promise(r => setTimeout(r, 2000));
       }
     }
   }
@@ -580,7 +582,25 @@
     const lm = document.getElementById('loadMsg');
     lb.style.display = 'flex';
     eb.style.display = 'none';
-    lm.textContent   = 'Loading…';
+
+    // Live counter so user sees it's working
+    let secs = 0;
+    lm.textContent = 'Connecting…';
+    const ticker = setInterval(() => {
+      secs++;
+      if      (secs < 10) lm.textContent = 'Loading… (' + secs + 's)';
+      else if (secs < 30) lm.textContent = 'GAS warming up… (' + secs + 's)';
+      else                lm.textContent = 'Still loading… (' + secs + 's)';
+    }, 1000);
+
+    // Hard 50s fallback
+    const hardTimer = setTimeout(() => {
+      clearInterval(ticker);
+      lb.style.display = 'none';
+      eb.style.display = 'flex';
+      document.getElementById('errMsg').textContent =
+        '⚠ No response from server. Test in browser: ' + GAS_URL + '?action=getUsers';
+    }, 50000);
 
     try {
       const [uJson, pJson] = await Promise.all([
@@ -588,12 +608,14 @@
         safeFetch(`${GAS_URL}?action=getProducts`)
       ]);
 
+      clearInterval(ticker);
+      clearTimeout(hardTimer);
+
       allUsers    = uJson.users;
       allProducts = pJson.products;
 
-      // Populate name dropdown
-      const nameSel    = document.getElementById('name');
-      const searchSel  = document.getElementById('searchName');
+      const nameSel   = document.getElementById('name');
+      const searchSel = document.getElementById('searchName');
       nameSel.innerHTML   = '<option value="">— Select Name —</option>';
       searchSel.innerHTML = '<option value="">— Select Name —</option>';
       allUsers.forEach(u => {
@@ -604,7 +626,6 @@
         });
       });
 
-      // Populate segment dropdown
       const segs   = [...new Set(allProducts.map(p => p.segment))].sort();
       const segSel = document.getElementById('segment');
       segSel.innerHTML = '<option value="">— Select Segment —</option>';
@@ -614,9 +635,11 @@
         segSel.appendChild(o);
       });
       segSel.disabled = false;
-
       lb.style.display = 'none';
+
     } catch (err) {
+      clearInterval(ticker);
+      clearTimeout(hardTimer);
       lb.style.display = 'none';
       eb.style.display = 'flex';
       document.getElementById('errMsg').textContent = '⚠ ' + err.message;
@@ -904,10 +927,10 @@
       const xhr = new XMLHttpRequest();
       const result = await new Promise((resolve, reject) => {
         xhr.open('POST', GAS_URL, true);
-        xhr.timeout  = 30000;
+        xhr.timeout  = 60000;
         xhr.onload   = () => { try { resolve(JSON.parse(xhr.responseText)); } catch(e) { reject(e); } };
         xhr.onerror   = () => reject(new Error('Network error'));
-        xhr.ontimeout = () => reject(new Error('Timeout'));
+        xhr.ontimeout = () => reject(new Error('Server timed out — try again'));
         xhr.send(JSON.stringify(payload));
       });
       if (!result.success) throw new Error(result.error || 'Server error');
