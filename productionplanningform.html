@@ -283,61 +283,6 @@
     .header-pill { display: none; }
   }
 
-  /* ── Mode Toggle ── */
-  .mode-toggle {
-    display: flex;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 4px;
-    gap: 4px;
-    margin-bottom: 14px;
-  }
-  .mode-btn {
-    flex: 1; padding: 9px;
-    border: none; border-radius: 7px;
-    font-size: 13px; font-weight: 600;
-    font-family: 'Outfit', sans-serif;
-    cursor: pointer;
-    color: var(--muted);
-    background: transparent;
-    transition: all 0.15s;
-  }
-  .mode-btn.active {
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-  }
-  .mode-btn.active.update-mode { color: var(--accent); }
-
-  /* ── Search Entries Panel ── */
-  .search-card {
-    background: var(--surface);
-    border: 1.5px solid var(--accent);
-    border-radius: 14px;
-    padding: 22px;
-    margin-bottom: 14px;
-    display: none;
-  }
-  .search-card.visible { display: block; }
-  .search-head {
-    font-size: 10.5px; font-weight: 700;
-    letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--accent); margin-bottom: 16px;
-  }
-  .search-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
-  .search-row .field { flex: 1; }
-  .btn-search {
-    padding: 10px 18px; border-radius: 9px;
-    border: none; background: var(--accent); color: #fff;
-    font-size: 13px; font-weight: 600;
-    font-family: 'Outfit', sans-serif; cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s;
-  }
-  .btn-search:hover { background: var(--accent-h); }
-  .btn-search:disabled { opacity: 0.5; cursor: not-allowed; }
-
   .entries-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
   .entry-item {
     display: flex; align-items: center; gap: 10px;
@@ -367,6 +312,28 @@
   }
   .entries-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
+  /* Same-day duplicate highlight in the "Your Entries" preview */
+  .entry-item.entry-dup {
+    background: #fef2f2;
+    border-color: var(--error);
+  }
+  .entry-item.entry-dup .entry-qty { color: var(--error); }
+
+  .entry-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .entry-action-btn {
+    border: 1px solid var(--border2);
+    background: #fff;
+    color: var(--label);
+    font-size: 11.5px; font-weight: 500;
+    padding: 5px 9px; border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Outfit', sans-serif;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .entry-edit-btn:hover { background: var(--accent-s); border-color: var(--accent); color: var(--accent); }
+  .entry-delete-btn:hover { background: #fef2f2; border-color: var(--error); color: var(--error); }
+
   /* Edit mode indicator */
   .edit-banner {
     display: none;
@@ -390,8 +357,8 @@
   .btn-cancel-edit:hover { background: rgba(37,99,235,0.08); }
 
   @media (max-width: 580px) {
-    .search-row { flex-direction: column; }
-    .search-row .btn-search { width: 100%; }
+    .entry-item { flex-wrap: wrap; }
+    .entry-actions { width: 100%; justify-content: flex-end; }
   }
 </style>
 </head>
@@ -417,37 +384,10 @@
     <button class="retry-btn" onclick="init()">↺ Retry</button>
   </div>
 
-  <!-- Mode Toggle -->
-  <div class="mode-toggle">
-    <button type="button" class="mode-btn active" id="btnNew" onclick="setMode('new')">✚ New Entry</button>
-    <button type="button" class="mode-btn update-mode" id="btnUpdate" onclick="setMode('update')">✏️ Update Entry</button>
-  </div>
-
-  <!-- Edit mode banner -->
+  <!-- Editing-a-staged-item banner -->
   <div class="edit-banner" id="editBanner">
-    ✏️ Editing row — make changes below and click Update
-    <button class="btn-cancel-edit" onclick="cancelEdit()">✕ Cancel</button>
-  </div>
-
-  <!-- Search entries panel (update mode) -->
-  <div class="search-card" id="searchCard">
-    <div class="search-head">🔍 Find Your Entry</div>
-    <div class="search-row">
-      <div class="field">
-        <label>Name</label>
-        <select id="searchName">
-          <option value="">— Select Name —</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="searchDate"/>
-      </div>
-      <button type="button" class="btn-search" id="searchBtn" onclick="searchEntries()">Search</button>
-    </div>
-    <div class="entries-list" id="entriesList">
-      <div class="entries-empty">Select a name and click Search</div>
-    </div>
+    ✏️ Editing item #<span id="editBannerIdx"></span> in your list — change it below and click Update Item
+    <button class="btn-cancel-edit" onclick="cancelStagedEdit()">✕ Cancel</button>
   </div>
 
   <form id="form" novalidate>
@@ -507,25 +447,25 @@
           <input type="number" id="quantity" placeholder="0" min="0"/>
         </div>
       </div>
-      <div class="g3" style="margin-top:14px;">
-        <div class="field">
-          <label>Size</label>
-          <input type="text" id="size" readonly placeholder="Auto-filled"/>
-        </div>
-        <div class="field">
-          <label>Company</label>
-          <input type="text" id="company" readonly placeholder="Auto-filled"/>
-        </div>
-        <div class="field">
-          <label>Market</label>
-          <input type="text" id="market" readonly placeholder="Auto-filled"/>
-        </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+        <button type="button" class="btn-clear" id="cancelAddBtn" style="display:none;" onclick="cancelStagedEdit()">Cancel</button>
+        <button type="button" class="btn-submit" id="addBtn" onclick="addOrUpdateStagedEntry()">
+          <span id="addBtnLabel">＋ Add</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Products added so far in this batch — review, edit or remove before submitting -->
+    <div class="card" id="myEntriesCard">
+      <div class="card-head"><span class="card-head-dot"></span> Your Entries</div>
+      <div id="myEntriesBody">
+        <div class="entries-empty">No products added yet — fill in Segment, Product &amp; Quantity above and click Add</div>
       </div>
     </div>
 
     <div class="btn-row">
       <button type="button" class="btn-clear" id="clearBtn" onclick="resetForm()">Clear All</button>
-      <button type="submit" class="btn-submit" id="submitBtn">
+      <button type="submit" class="btn-submit" id="submitBtn" disabled>
         <span id="submitLabel">Submit Entry</span>
       </button>
     </div>
@@ -582,25 +522,7 @@
     const lm = document.getElementById('loadMsg');
     lb.style.display = 'flex';
     eb.style.display = 'none';
-
-    // Live counter so user sees it's working
-    let secs = 0;
-    lm.textContent = 'Connecting…';
-    const ticker = setInterval(() => {
-      secs++;
-      if      (secs < 10) lm.textContent = 'Loading… (' + secs + 's)';
-      else if (secs < 30) lm.textContent = 'GAS warming up… (' + secs + 's)';
-      else                lm.textContent = 'Still loading… (' + secs + 's)';
-    }, 1000);
-
-    // Hard 50s fallback
-    const hardTimer = setTimeout(() => {
-      clearInterval(ticker);
-      lb.style.display = 'none';
-      eb.style.display = 'flex';
-      document.getElementById('errMsg').textContent =
-        '⚠ No response from server. Test in browser: ' + GAS_URL + '?action=getUsers';
-    }, 50000);
+    lm.textContent   = 'Loading…';
 
     try {
       const [uJson, pJson] = await Promise.all([
@@ -608,24 +530,19 @@
         safeFetch(`${GAS_URL}?action=getProducts`)
       ]);
 
-      clearInterval(ticker);
-      clearTimeout(hardTimer);
-
       allUsers    = uJson.users;
       allProducts = pJson.products;
 
-      const nameSel   = document.getElementById('name');
-      const searchSel = document.getElementById('searchName');
+      // Populate name dropdown
+      const nameSel    = document.getElementById('name');
       nameSel.innerHTML   = '<option value="">— Select Name —</option>';
-      searchSel.innerHTML = '<option value="">— Select Name —</option>';
       allUsers.forEach(u => {
-        [nameSel, searchSel].forEach(sel => {
-          const o = document.createElement('option');
-          o.value = o.textContent = u.name;
-          sel.appendChild(o);
-        });
+        const o = document.createElement('option');
+        o.value = o.textContent = u.name;
+        nameSel.appendChild(o);
       });
 
+      // Populate segment dropdown
       const segs   = [...new Set(allProducts.map(p => p.segment))].sort();
       const segSel = document.getElementById('segment');
       segSel.innerHTML = '<option value="">— Select Segment —</option>';
@@ -635,11 +552,9 @@
         segSel.appendChild(o);
       });
       segSel.disabled = false;
-      lb.style.display = 'none';
 
+      lb.style.display = 'none';
     } catch (err) {
-      clearInterval(ticker);
-      clearTimeout(hardTimer);
       lb.style.display = 'none';
       eb.style.display = 'flex';
       document.getElementById('errMsg').textContent = '⚠ ' + err.message;
@@ -654,6 +569,13 @@
     document.getElementById('department').value = user ? user.dept  : '';
   }
 
+  function escapeHtmlLocal(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   // ── Segment → enable/populate Product combobox ──────
   function onSegmentChange() {
     const seg  = document.getElementById('segment').value;
@@ -661,9 +583,6 @@
     const wrap = document.getElementById('productWrap');
     inp.value = '';
     inp.classList.remove('has-value');
-    document.getElementById('size').value    = '';
-    document.getElementById('company').value = '';
-    document.getElementById('market').value  = '';
     currentProducts = seg ? allProducts.filter(p => p.segment === seg) : [];
     if (!seg) {
       inp.disabled = true;
@@ -707,12 +626,6 @@
     inp.value = val;
     inp.classList.add('has-value');
     closeDropdown();
-    // Auto-fill Size & Company
-    const p = currentProducts.find(p => p.product === val);
-    document.getElementById('size').value    = p ? (p.size    || '') : '';
-    document.getElementById('company').value = p ? (p.company || '') : '';
-    document.getElementById('market').value  = p ? (p.market  || '') : '';
-    document.getElementById('market').value  = p ? (p.market  || '') : '';
     document.getElementById('quantity').focus();
   }
 
@@ -759,157 +672,30 @@
     if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
   }
 
-  // ── Mode & Edit state ─────────────────────────────────
-  let currentMode     = 'new';   // 'new' | 'update'
-  let editingRowIndex = null;
+  // ── Staged entries: products added to this batch, not yet submitted ──
+  // Workflow: pick Segment/Product/Quantity → Add → repeat for each product
+  // → optionally click Edit on any added item to correct it → Submit Entry
+  // sends every staged item to the server in one go.
+  let stagedEntries      = [];   // [{date, name, email, department, segment, product, quantity}]
+  let editingStagedIndex = null; // index into stagedEntries being edited, or null
 
-  function setMode(mode) {
-    currentMode = mode;
-    document.getElementById('btnNew').classList.toggle('active', mode === 'new');
-    document.getElementById('btnUpdate').classList.toggle('active', mode === 'update');
-    document.getElementById('searchCard').classList.toggle('visible', mode === 'update');
-    document.getElementById('submitLabel').textContent = mode === 'new' ? 'Submit Entry' : 'Update Entry';
-    document.getElementById('clearBtn').textContent    = mode === 'new' ? 'Clear All' : 'Clear All';
-    if (mode === 'update') {
-      // Pre-fill search name from current name selection
-      const cur = document.getElementById('name').value;
-      if (cur) document.getElementById('searchName').value = cur;
-      document.getElementById('searchDate').value = document.getElementById('date').value;
-    }
-    if (mode === 'new') cancelEdit();
-  }
-
-  // ── Search entries ─────────────────────────────────────
-  async function searchEntries() {
-    const name = document.getElementById('searchName').value;
-    const date = document.getElementById('searchDate').value;
-    if (!name) { toast('Select a name to search', 'fail'); return; }
-
-    const btn = document.getElementById('searchBtn');
-    btn.disabled = true;
-    btn.textContent = 'Searching…';
-    document.getElementById('entriesList').innerHTML = '<div class="entries-empty">Loading…</div>';
-
-    try {
-      // Convert yyyy-mm-dd → dd/MM/yyyy for GAS filter
-      let dateParam = '';
-      if (date) {
-        const p = date.split('-');
-        dateParam = `${p[2]}/${p[1]}/${p[0]}`;
-      }
-      const url  = `${GAS_URL}?action=getMyEntries&name=${encodeURIComponent(name)}&date=${encodeURIComponent(dateParam)}`;
-      const json = await safeFetch(url);
-      renderEntries(json.entries || []);
-    } catch (err) {
-      toast('Search error: ' + err.message, 'fail');
-      document.getElementById('entriesList').innerHTML = '<div class="entries-empty">Failed to load entries</div>';
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Search';
-    }
-  }
-
-  function renderEntries(entries) {
-    const list = document.getElementById('entriesList');
-    if (!entries.length) {
-      list.innerHTML = '<div class="entries-empty">No entries found</div>';
-      return;
-    }
-    list.innerHTML = entries.map(e => `
-      <div class="entry-item" onclick="loadEntry(${JSON.stringify(e).replace(/"/g,'&quot;')})">
-        <div class="entry-meta">
-          <strong>${e.product}</strong>
-          <span>${e.date} · ${e.segment}</span>
-        </div>
-        <span class="entry-dept">${e.department}</span>
-        <span class="entry-qty">${e.quantity}</span>
-      </div>`).join('');
-  }
-
-  function loadEntry(entry) {
-    // Highlight selected
-    document.querySelectorAll('.entry-item').forEach(el => el.classList.remove('selected'));
-    event.currentTarget.classList.add('selected');
-
-    editingRowIndex = entry.rowIndex;
-
-    // Fill form fields
-    document.getElementById('date').value = (() => {
-      const p = entry.date.split('/');
-      return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : entry.date;
-    })();
-    document.getElementById('name').value       = entry.name;
-    document.getElementById('email').value      = entry.email;
-    document.getElementById('department').value = entry.department;
-    document.getElementById('quantity').value   = entry.quantity;
-
-    // Set segment
-    const segSel = document.getElementById('segment');
-    segSel.value = entry.segment;
-
-    // Set product via combobox
-    const seg = entry.segment;
-    currentProducts = seg ? allProducts.filter(p => p.segment === seg) : [];
-    // Auto-fill size & company
-    const pd = currentProducts.find(p => p.product === entry.product);
-    document.getElementById('size').value    = pd ? (pd.size    || '') : '';
-    document.getElementById('company').value = pd ? (pd.company || '') : '';
-    document.getElementById('market').value  = pd ? (pd.market  || '') : '';
-    document.getElementById('market').value  = pd ? (pd.market  || '') : '';
-    const prodInp  = document.getElementById('product');
-    const prodWrap = document.getElementById('productWrap');
-    if (seg) {
-      prodInp.disabled = false;
-      prodWrap.classList.remove('combo-disabled');
-    }
-    prodInp.value = entry.product;
-    prodInp.classList.add('has-value');
-
-    // Show edit banner
-    document.getElementById('editBanner').classList.add('visible');
-    document.getElementById('submitLabel').textContent = 'Update Entry';
-
-    // Scroll to form
-    document.getElementById('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function cancelEdit() {
-    editingRowIndex = null;
-    document.getElementById('editBanner').classList.remove('visible');
-    document.getElementById('submitLabel').textContent = currentMode === 'new' ? 'Submit Entry' : 'Update Entry';
-    document.querySelectorAll('.entry-item').forEach(el => el.classList.remove('selected'));
-  }
-
-  // ── Submit ─────────────────────────────────────────────
-  document.getElementById('form').addEventListener('submit', async function (e) {
-    e.preventDefault();
-
-    const checks = [
+  function addOrUpdateStagedEntry() {
+    const fields = [
       { id: 'date',     label: 'Date' },
       { id: 'name',     label: 'Name' },
       { id: 'segment',  label: 'Segment' },
       { id: 'product',  label: 'Product' },
       { id: 'quantity', label: 'Quantity' }
     ];
-    for (const c of checks) {
-      if (!document.getElementById(c.id).value) {
-        document.getElementById(c.id).focus();
-        toast('Required: ' + c.label, 'fail');
+    for (const f of fields) {
+      if (!document.getElementById(f.id).value) {
+        document.getElementById(f.id).focus();
+        toast('Required: ' + f.label, 'fail');
         return;
       }
     }
 
-    if (currentMode === 'update' && !editingRowIndex) {
-      toast('Select an entry to update', 'fail');
-      return;
-    }
-
-    const btn = document.getElementById('submitBtn');
-    const lbl = document.getElementById('submitLabel');
-    btn.disabled = true;
-    lbl.textContent = currentMode === 'update' ? 'Updating…' : 'Submitting…';
-
-    const payload = {
+    const entry = {
       date:       document.getElementById('date').value,
       name:       document.getElementById('name').value,
       email:      document.getElementById('email').value,
@@ -918,43 +704,209 @@
       product:    document.getElementById('product').value,
       quantity:   Number(document.getElementById('quantity').value) || 0
     };
-    if (currentMode === 'update') {
-      payload.action   = 'update';
-      payload.rowIndex = editingRowIndex;
+
+    if (editingStagedIndex !== null) {
+      stagedEntries[editingStagedIndex] = entry;
+      toast('Item updated in your list ✓', 'success');
+      exitStagedEditMode();
+    } else {
+      stagedEntries.push(entry);
+      toast('Added to your list ✓', 'success');
     }
 
-    try {
+    // Clear Segment/Product/Quantity for the next product; Date & Name stay
+    // as-is since a batch is usually one person filing for one day.
+    document.getElementById('segment').value = '';
+    onSegmentChange();
+    document.getElementById('quantity').value = '';
+    document.getElementById('segment').focus();
+
+    renderStagedEntries();
+  }
+
+  function exitStagedEditMode() {
+    editingStagedIndex = null;
+    document.getElementById('editBanner').classList.remove('visible');
+    document.getElementById('addBtnLabel').textContent = '＋ Add';
+    document.getElementById('cancelAddBtn').style.display = 'none';
+  }
+
+  function cancelStagedEdit() {
+    exitStagedEditMode();
+    document.getElementById('segment').value = '';
+    onSegmentChange();
+    document.getElementById('quantity').value = '';
+    renderStagedEntries();
+  }
+
+  function editStagedEntry(idx) {
+    const entry = stagedEntries[idx];
+    if (!entry) return;
+    editingStagedIndex = idx;
+
+    document.getElementById('date').value       = entry.date;
+    document.getElementById('name').value       = entry.name;
+    document.getElementById('email').value      = entry.email;
+    document.getElementById('department').value = entry.department;
+
+    const segSel = document.getElementById('segment');
+    segSel.value = entry.segment;
+    currentProducts = entry.segment ? allProducts.filter(p => p.segment === entry.segment) : [];
+    const prodInp  = document.getElementById('product');
+    const prodWrap = document.getElementById('productWrap');
+    if (entry.segment) {
+      prodInp.disabled = false;
+      prodWrap.classList.remove('combo-disabled');
+    }
+    prodInp.value = entry.product;
+    prodInp.classList.add('has-value');
+    document.getElementById('quantity').value = entry.quantity;
+
+    document.getElementById('editBannerIdx').textContent = idx + 1;
+    document.getElementById('editBanner').classList.add('visible');
+    document.getElementById('addBtnLabel').textContent = 'Update Item';
+    document.getElementById('cancelAddBtn').style.display = 'inline-block';
+
+    renderStagedEntries();
+    document.getElementById('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function removeStagedEntry(idx) {
+    stagedEntries.splice(idx, 1);
+    if (editingStagedIndex === idx) {
+      cancelStagedEdit();
+      return; // cancelStagedEdit() already re-renders
+    }
+    if (editingStagedIndex !== null && editingStagedIndex > idx) {
+      editingStagedIndex -= 1; // shift so it still points at the same item
+    }
+    renderStagedEntries();
+  }
+
+  function renderStagedEntries() {
+    const body = document.getElementById('myEntriesBody');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (!stagedEntries.length) {
+      body.innerHTML = '<div class="entries-empty">No products added yet — fill in Segment, Product &amp; Quantity above and click Add</div>';
+      submitBtn.disabled = true;
+      return;
+    }
+    submitBtn.disabled = false;
+
+    // Flag duplicates: same product + same quantity added more than once.
+    const dupKey = e => (e.product || '').trim().toLowerCase() + '|' + e.quantity;
+    const dupCount = {};
+    stagedEntries.forEach(e => { const k = dupKey(e); dupCount[k] = (dupCount[k] || 0) + 1; });
+    const hasDup = Object.values(dupCount).some(c => c > 1);
+
+    const total = stagedEntries.reduce((sum, e) => sum + (Number(e.quantity) || 0), 0);
+    const listHtml = stagedEntries.map((e, idx) => {
+      const isDup = dupCount[dupKey(e)] > 1;
+      const isEditing = editingStagedIndex === idx;
+      return `
+      <div class="entry-item${isDup ? ' entry-dup' : ''}${isEditing ? ' selected' : ''}" style="cursor:default;">
+        <div class="entry-meta">
+          <strong>${escapeHtmlLocal(e.product)}</strong>
+          <span>${escapeHtmlLocal(e.segment)}</span>
+        </div>
+        <span class="entry-dept">${escapeHtmlLocal(e.department)}</span>
+        <span class="entry-qty">${escapeHtmlLocal(e.quantity)}</span>
+        <div class="entry-actions">
+          <button type="button" class="entry-action-btn entry-edit-btn" title="Edit this item" onclick="editStagedEntry(${idx})">✏️ Edit</button>
+          <button type="button" class="entry-action-btn entry-delete-btn" title="Remove this item" onclick="removeStagedEntry(${idx})">🗑️ Remove</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    const dupWarning = hasDup
+      ? `<div style="background:#fef2f2;border:1px solid #fecaca;color:var(--error);border-radius:9px;padding:9px 13px;font-size:12.5px;margin-bottom:10px;">⚠ Possible duplicate items below (same product &amp; quantity) — highlighted in red. Edit or remove the extra one before submitting.</div>`
+      : '';
+
+    body.innerHTML = `${dupWarning}<div class="entries-list">${listHtml}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--muted);">
+        <span>${stagedEntries.length} item${stagedEntries.length === 1 ? '' : 's'} to submit</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text);">Total Qty: ${total}</span>
+      </div>`;
+  }
+
+  // Posts one entry to the backend as a new row and resolves with the parsed
+  // JSON response (or rejects on network/timeout/parse failure).
+  function postEntry(payload) {
+    return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      const result = await new Promise((resolve, reject) => {
-        xhr.open('POST', GAS_URL, true);
-        xhr.timeout  = 60000;
-        xhr.onload   = () => { try { resolve(JSON.parse(xhr.responseText)); } catch(e) { reject(e); } };
-        xhr.onerror   = () => reject(new Error('Network error'));
-        xhr.ontimeout = () => reject(new Error('Server timed out — try again'));
-        xhr.send(JSON.stringify(payload));
-      });
-      if (!result.success) throw new Error(result.error || 'Server error');
+      xhr.open('POST', GAS_URL, true);
+      xhr.timeout   = 60000;
+      xhr.onload    = () => { try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); } };
+      xhr.onerror   = () => reject(new Error('Network error'));
+      xhr.ontimeout = () => reject(new Error('Server timed out — try again'));
+      xhr.send(JSON.stringify(payload));
+    });
+  }
 
-      if (currentMode === 'update') {
-        toast('Entry updated ✓', 'success');
-        cancelEdit();
-        // Re-run search to refresh list
-        searchEntries();
-      } else {
-        toast('Entry saved ✓', 'success');
-        document.getElementById('quantity').value = '';
-        document.getElementById('quantity').focus();
-      }
-    } catch (err) {
-      toast('Error: ' + err.message, 'fail');
-    } finally {
-      btn.disabled = false;
-      lbl.textContent = currentMode === 'update' ? 'Update Entry' : 'Submit Entry';
+  // ── Submit — sends every staged item to the server, one at a time ──────
+  document.getElementById('form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    if (editingStagedIndex !== null) {
+      toast('Finish editing that item (Update Item or Cancel) first', 'fail');
+      return;
     }
+    if (!stagedEntries.length) {
+      toast('Add at least one product before submitting', 'fail');
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    const lbl = document.getElementById('submitLabel');
+    btn.disabled = true;
+    document.getElementById('cancelAddBtn').style.display = 'none';
+    document.getElementById('addBtn').disabled = true;
+
+    const totalToSubmit = stagedEntries.length;
+    const submitted = [];
+    let failure = null;
+
+    for (let i = 0; i < stagedEntries.length; i++) {
+      lbl.textContent = `Submitting ${i + 1} of ${totalToSubmit}…`;
+      try {
+        const result = await postEntry(stagedEntries[i]);
+        if (!result.success) throw new Error(result.error || 'Server error');
+        submitted.push(i);
+      } catch (err) {
+        failure = err;
+        break;
+      }
+    }
+
+    // Remove only the ones that actually made it to the sheet — anything
+    // after a failure stays staged so the person can retry without
+    // re-entering data.
+    stagedEntries = stagedEntries.filter((_, i) => !submitted.includes(i));
+    renderStagedEntries();
+
+    if (failure) {
+      const remaining = totalToSubmit - submitted.length;
+      toast(`Submitted ${submitted.length} of ${totalToSubmit} — ${remaining} left in list (${failure.message})`, 'fail');
+    } else {
+      toast(`${submitted.length} entr${submitted.length === 1 ? 'y' : 'ies'} submitted ✓`, 'success');
+      document.getElementById('segment').value = '';
+      onSegmentChange();
+      document.getElementById('quantity').value = '';
+    }
+
+    btn.disabled = stagedEntries.length === 0;
+    document.getElementById('addBtn').disabled = false;
+    lbl.textContent = 'Submit Entry';
   });
 
   // ── Reset All ──────────────────────────────────────────
   function resetForm() {
+    if (stagedEntries.length && !confirm(`This will remove ${stagedEntries.length} unsubmitted item(s) from your list. Continue?`)) {
+      return;
+    }
+    stagedEntries = [];
+    editingStagedIndex = null;
     document.getElementById('date').value       = new Date().toISOString().split('T')[0];
     document.getElementById('name').value       = '';
     document.getElementById('email').value      = '';
@@ -966,11 +918,9 @@
     pi.classList.remove('has-value');
     document.getElementById('productWrap').classList.add('combo-disabled');
     closeDropdown();
-    document.getElementById('size').value       = '';
-    document.getElementById('company').value    = '';
-    document.getElementById('market').value     = '';
     document.getElementById('quantity').value   = '';
-    cancelEdit();
+    exitStagedEditMode();
+    renderStagedEntries();
   }
 
   // ── Toast ──────────────────────────────────────────────
