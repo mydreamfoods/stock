@@ -484,17 +484,37 @@
   // Default date
   document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
+  // Google intercepts the request before it reaches doGet()/doPost() (usually
+  // because the deployment's "Who has access" requires a signed-in Google
+  // account the visitor isn't logged into) and serves a sign-in/consent page
+  // instead of JSON. That page is always HTML starting with <!DOCTYPE or <html,
+  // so detect it and surface a message that actually points at the fix.
+  function parseGasResponse(responseText) {
+    const trimmed = (responseText || '').trim();
+    if (/^<!DOCTYPE|^<html/i.test(trimmed)) {
+      throw new Error('Blocked by Google sign-in — ask your admin to set the Apps Script deployment access to "Anyone"');
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (e) {
+      throw new Error('Unexpected response: ' + trimmed.slice(0, 80));
+    }
+  }
+
   // ── XHR helper: works reliably on mobile with GAS ────
+  // Timeout is capped at 30s/attempt (was 60s) and retries wait a random
+  // 1.5–3.5s (was a flat 2s) so that when several phones fail at once they
+  // don't all retry in the same instant and re-collide on the server.
   function xhrGet(url, onSlow) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
-      xhr.timeout = 60000;
-      const slowTimer = setTimeout(() => { if (onSlow) onSlow(); }, 10000);
+      xhr.timeout = 30000;
+      const slowTimer = setTimeout(() => { if (onSlow) onSlow(); }, 8000);
       xhr.onload  = () => {
         clearTimeout(slowTimer);
-        try { resolve(JSON.parse(xhr.responseText)); }
-        catch(e) { reject(new Error('Parse error: ' + xhr.responseText.slice(0,80))); }
+        try { resolve(parseGasResponse(xhr.responseText)); }
+        catch(e) { reject(e); }
       };
       xhr.onerror   = () => { clearTimeout(slowTimer); reject(new Error('Network error')); };
       xhr.ontimeout = () => { clearTimeout(slowTimer); reject(new Error('Server timed out — try again')); };
@@ -505,53 +525,125 @@
   async function safeFetch(url, retries = 2, onSlow) {
     for (let i = 0; i < retries; i++) {
       try {
-        const json = await xhrGet(url, i === 0 ? onSlow : null);
+        const json = await xhrGet(url, onSlow);
         if (json.success) return json;
         throw new Error(json.error || 'Server error');
       } catch (err) {
         if (i === retries - 1) throw err;
-        await new Promise(r => setTimeout(r, 2000));
+        const jitterMs = 1500 + Math.random() * 2000;
+        await new Promise(r => setTimeout(r, jitterMs));
       }
     }
   }
 
-  // ── Init: load users & products in parallel ──────────
+  // ── Local cache for Users & Products ──────────────────
+  // These two lists rarely change (staff list, product catalog), but every
+  // page load was re-reading the whole sheet for them — the biggest source
+  // of load when several phones open the form at once. Cache them in
+  // localStorage for CACHE_TTL_MS; a fresh cache means an instant load with
+  // ZERO network calls, which is what actually fixes the "3 people open it
+  // together" case for anyone but the very first opener.
+  const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+  function readCache(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || (Date.now() - parsed.savedAt) > CACHE_TTL_MS) return null;
+      return parsed.data;
+    } catch (e) { return null; }
+  }
+
+  function writeCache(key, data) {
+    try { localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); }
+    catch (e) { /* storage full/unavailable — safe to ignore, just skips caching */ }
+  }
+
+  function populateDropdowns() {
+    const nameSel = document.getElementById('name');
+    const curName = nameSel.value;
+    nameSel.innerHTML = '<option value="">— Select Name —</option>';
+    allUsers.forEach(u => {
+      const o = document.createElement('option');
+      o.value = o.textContent = u.name;
+      nameSel.appendChild(o);
+    });
+    if (curName && allUsers.some(u => u.name === curName)) nameSel.value = curName;
+
+    const curSeg = document.getElementById('segment').value;
+    const segs   = [...new Set(allProducts.map(p => p.segment))].sort();
+    const segSel = document.getElementById('segment');
+    segSel.innerHTML = '<option value="">— Select Segment —</option>';
+    segs.forEach(s => {
+      const o = document.createElement('option');
+      o.value = o.textContent = s;
+      segSel.appendChild(o);
+    });
+    segSel.disabled = false;
+    if (curSeg && segs.includes(curSeg)) segSel.value = curSeg;
+  }
+
+  // Fetches fresh Users/Products in the background and silently updates the
+  // cache + dropdowns (preserving whatever the person already selected).
+  // Used both to refresh a cache that's still valid-but-aging, and after a
+  // cold load, so the cache is warm for the next person who opens the form.
+  async function refreshUsersAndProductsInBackground() {
+    try {
+      const [uJson, pJson] = await Promise.all([
+        safeFetch(`${GAS_URL}?action=getUsers`, 1),
+        safeFetch(`${GAS_URL}?action=getProducts`, 1)
+      ]);
+      allUsers    = uJson.users;
+      allProducts = pJson.products;
+      writeCache('ppf_users_v1', allUsers);
+      writeCache('ppf_products_v1', allProducts);
+      populateDropdowns();
+    } catch (e) { /* silent — the visible/cached data just stays as-is */ }
+  }
+
+  // ── Init: load users & products (cache-first) ─────────
   async function init() {
     const lb = document.getElementById('loadBanner');
     const eb = document.getElementById('errBanner');
     const lm = document.getElementById('loadMsg');
-    lb.style.display = 'flex';
     eb.style.display = 'none';
+
+    const cachedUsers    = readCache('ppf_users_v1');
+    const cachedProducts = readCache('ppf_products_v1');
+
+    if (cachedUsers && cachedProducts) {
+      // Instant path: no network call at all, so this device adds zero load
+      // to the server even if several people open the form at once.
+      allUsers    = cachedUsers;
+      allProducts = cachedProducts;
+      populateDropdowns();
+      lb.style.display = 'none';
+      refreshUsersAndProductsInBackground(); // keep it fresh, quietly
+      return;
+    }
+
+    lb.style.display = 'flex';
     lm.textContent   = 'Loading…';
+    let slowStage = 0;
+    const onSlow = () => {
+      slowStage++;
+      lm.textContent = slowStage === 1
+        ? 'Still loading… this can take longer if several people are using the form right now'
+        : 'Still trying — the sheet is busy, hang tight';
+    };
 
     try {
       const [uJson, pJson] = await Promise.all([
-        safeFetch(`${GAS_URL}?action=getUsers`),
-        safeFetch(`${GAS_URL}?action=getProducts`)
+        safeFetch(`${GAS_URL}?action=getUsers`, 2, onSlow),
+        safeFetch(`${GAS_URL}?action=getProducts`, 2, onSlow)
       ]);
 
       allUsers    = uJson.users;
       allProducts = pJson.products;
-
-      // Populate name dropdown
-      const nameSel    = document.getElementById('name');
-      nameSel.innerHTML   = '<option value="">— Select Name —</option>';
-      allUsers.forEach(u => {
-        const o = document.createElement('option');
-        o.value = o.textContent = u.name;
-        nameSel.appendChild(o);
-      });
-
-      // Populate segment dropdown
-      const segs   = [...new Set(allProducts.map(p => p.segment))].sort();
-      const segSel = document.getElementById('segment');
-      segSel.innerHTML = '<option value="">— Select Segment —</option>';
-      segs.forEach(s => {
-        const o = document.createElement('option');
-        o.value = o.textContent = s;
-        segSel.appendChild(o);
-      });
-      segSel.disabled = false;
+      writeCache('ppf_users_v1', allUsers);
+      writeCache('ppf_products_v1', allProducts);
+      populateDropdowns();
 
       lb.style.display = 'none';
     } catch (err) {
@@ -837,7 +929,7 @@
       const xhr = new XMLHttpRequest();
       xhr.open('POST', GAS_URL, true);
       xhr.timeout   = 60000;
-      xhr.onload    = () => { try { resolve(JSON.parse(xhr.responseText)); } catch (e) { reject(e); } };
+      xhr.onload    = () => { try { resolve(parseGasResponse(xhr.responseText)); } catch (e) { reject(e); } };
       xhr.onerror   = () => reject(new Error('Network error'));
       xhr.ontimeout = () => reject(new Error('Server timed out — try again'));
       xhr.send(JSON.stringify(payload));
