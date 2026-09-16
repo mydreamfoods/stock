@@ -922,18 +922,27 @@
       </div>`;
   }
 
-  // Posts one entry to the backend as a new row and resolves with the parsed
-  // JSON response (or rejects on network/timeout/parse failure).
-  function postEntry(payload) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', GAS_URL, true);
-      xhr.timeout   = 60000;
-      xhr.onload    = () => { try { resolve(parseGasResponse(xhr.responseText)); } catch (e) { reject(e); } };
-      xhr.onerror   = () => reject(new Error('Network error'));
-      xhr.ontimeout = () => reject(new Error('Server timed out — try again'));
-      xhr.send(JSON.stringify(payload));
-    });
+  // Posts ALL entries to the backend in a single batch request.
+  // Uses fetch with Content-Type: text/plain — this avoids the CORS preflight
+  // that causes GAS to redirect POST → GET → return HTML instead of JSON.
+  async function postBatch(entries, retries = 3) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const res = await fetch(GAS_URL, {
+          method:  'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body:    JSON.stringify({ action: 'batch', entries })
+        });
+        const text = await res.text();
+        const json = parseGasResponse(text);
+        if (!json.success) throw new Error(json.error || 'Server error');
+        return json;
+      } catch (err) {
+        if (attempt === retries - 1) throw err;
+        // Jittered backoff: 2–4s so concurrent phones don't all retry at once
+        await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+      }
+    }
   }
 
   // ── Submit — sends every staged item to the server, one at a time ──────
@@ -956,35 +965,21 @@
     document.getElementById('addBtn').disabled = true;
 
     const totalToSubmit = stagedEntries.length;
-    const submitted = [];
-    let failure = null;
+    lbl.textContent = `Submitting ${totalToSubmit} item${totalToSubmit === 1 ? '' : 's'}…`;
 
-    for (let i = 0; i < stagedEntries.length; i++) {
-      lbl.textContent = `Submitting ${i + 1} of ${totalToSubmit}…`;
-      try {
-        const result = await postEntry(stagedEntries[i]);
-        if (!result.success) throw new Error(result.error || 'Server error');
-        submitted.push(i);
-      } catch (err) {
-        failure = err;
-        break;
-      }
-    }
-
-    // Remove only the ones that actually made it to the sheet — anything
-    // after a failure stays staged so the person can retry without
-    // re-entering data.
-    stagedEntries = stagedEntries.filter((_, i) => !submitted.includes(i));
-    renderStagedEntries();
-
-    if (failure) {
-      const remaining = totalToSubmit - submitted.length;
-      toast(`Submitted ${submitted.length} of ${totalToSubmit} — ${remaining} left in list (${failure.message})`, 'fail');
-    } else {
-      toast(`${submitted.length} entr${submitted.length === 1 ? 'y' : 'ies'} submitted ✓`, 'success');
+    try {
+      await postBatch([...stagedEntries]);
+      const count = totalToSubmit;
+      stagedEntries = [];
+      renderStagedEntries();
+      toast(`${count} entr${count === 1 ? 'y' : 'ies'} submitted ✓`, 'success');
       document.getElementById('segment').value = '';
       onSegmentChange();
       document.getElementById('quantity').value = '';
+    } catch (err) {
+      // All entries stay staged — user can retry without re-entering
+      renderStagedEntries();
+      toast(`Submit failed — ${err.message}`, 'fail');
     }
 
     btn.disabled = stagedEntries.length === 0;
