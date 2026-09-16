@@ -95,11 +95,18 @@
     border-radius: 50%;
     background: var(--accent);
   }
+  .card-head-badge {
+    margin-left: auto;
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: none;
+    padding: 3px 9px; border-radius: 20px;
+    background: var(--accent-s); color: var(--accent);
+    border: 1px solid rgba(37,99,235,0.2);
+  }
 
   /* ── Grid ── */
   .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
   .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  /* Product row: segment + product + quantity */
   .g-product { display: grid; grid-template-columns: 160px 1fr 100px; gap: 14px; }
 
   /* ── Field ── */
@@ -138,7 +145,6 @@
   select:disabled { opacity: 0.4; cursor: not-allowed; }
   input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
 
-  /* Read-only autofill fields */
   input[readonly] {
     background: var(--accent-s);
     border-color: rgba(37,99,235,0.18);
@@ -147,7 +153,6 @@
     cursor: default;
   }
 
-  /* Quantity in product row */
   #quantity {
     font-family: 'JetBrains Mono', monospace;
     font-size: 16px;
@@ -205,6 +210,13 @@
   .btn-submit:hover { background: var(--accent-h); box-shadow: 0 4px 14px rgba(37,99,235,0.36); }
   .btn-submit:active { transform: scale(0.98); }
   .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-mini {
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--muted); font-size: 11px; font-weight: 500;
+    padding: 3px 9px; border-radius: 6px;
+    cursor: pointer; font-family: 'Outfit', sans-serif;
+  }
+  .btn-mini:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── Toast ── */
   #toast {
@@ -224,9 +236,7 @@
 
   /* ── Product Combobox ── */
   .combo-wrap { position: relative; }
-  .combo-wrap input {
-    padding-right: 32px;
-  }
+  .combo-wrap input { padding-right: 32px; }
   .combo-wrap input.has-value {
     border-color: rgba(37,99,235,0.4);
     background: var(--accent-s);
@@ -312,7 +322,6 @@
   }
   .entries-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
-  /* Same-day duplicate highlight in the "Your Entries" preview */
   .entry-item.entry-dup {
     background: #fef2f2;
     border-color: var(--error);
@@ -334,7 +343,6 @@
   .entry-edit-btn:hover { background: var(--accent-s); border-color: var(--accent); color: var(--accent); }
   .entry-delete-btn:hover { background: #fef2f2; border-color: var(--error); color: var(--error); }
 
-  /* Edit mode indicator */
   .edit-banner {
     display: none;
     background: var(--accent-s);
@@ -370,7 +378,7 @@
     <h1>Production Planning</h1>
     <p>My Dream Foods Limited</p>
   </div>
-  <span class="header-pill">ENTRY FORM</span>
+  <span class="header-pill" id="entryTypePill" style="display:none;">ENTRY FORM</span>
 </div>
 
 <div class="container">
@@ -407,21 +415,16 @@
           </select>
         </div>
       </div>
-      <div class="g2">
-        <div class="field">
-          <label>Email</label>
-          <input type="text" id="email" readonly placeholder="Auto-filled"/>
-        </div>
-        <div class="field">
-          <label>Department</label>
-          <input type="text" id="department" readonly placeholder="Auto-filled"/>
-        </div>
-      </div>
+      <input type="hidden" id="email"/>
+      <input type="hidden" id="department"/>
     </div>
 
     <!-- Product + Quantity -->
     <div class="card">
-      <div class="card-head"><span class="card-head-dot"></span> Product &amp; Quantity</div>
+      <div class="card-head">
+        <span class="card-head-dot"></span> Product &amp; Quantity
+        <span class="card-head-badge" id="stockRefreshBadge" style="display:none;cursor:pointer;" onclick="refreshSalesStock()">↺ Refresh stock</span>
+      </div>
       <div class="g-product">
         <div class="field">
           <label>Segment <span class="req">*</span></label>
@@ -445,6 +448,7 @@
         <div class="field">
           <label>Quantity <span class="req">*</span></label>
           <input type="number" id="quantity" placeholder="0" min="0"/>
+          <span id="stockHint" style="display:none;font-size:11px;color:var(--muted);"></span>
         </div>
       </div>
       <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
@@ -484,11 +488,6 @@
   // Default date
   document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
-  // Google intercepts the request before it reaches doGet()/doPost() (usually
-  // because the deployment's "Who has access" requires a signed-in Google
-  // account the visitor isn't logged into) and serves a sign-in/consent page
-  // instead of JSON. That page is always HTML starting with <!DOCTYPE or <html,
-  // so detect it and surface a message that actually points at the fix.
   function parseGasResponse(responseText) {
     const trimmed = (responseText || '').trim();
     if (/^<!DOCTYPE|^<html/i.test(trimmed)) {
@@ -501,10 +500,6 @@
     }
   }
 
-  // ── XHR helper: works reliably on mobile with GAS ────
-  // Timeout is capped at 30s/attempt (was 60s) and retries wait a random
-  // 1.5–3.5s (was a flat 2s) so that when several phones fail at once they
-  // don't all retry in the same instant and re-collide on the server.
   function xhrGet(url, onSlow) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -537,12 +532,6 @@
   }
 
   // ── Local cache for Users & Products ──────────────────
-  // These two lists rarely change (staff list, product catalog), but every
-  // page load was re-reading the whole sheet for them — the biggest source
-  // of load when several phones open the form at once. Cache them in
-  // localStorage for CACHE_TTL_MS; a fresh cache means an instant load with
-  // ZERO network calls, which is what actually fixes the "3 people open it
-  // together" case for anyone but the very first opener.
   const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
   function readCache(key) {
@@ -584,10 +573,6 @@
     if (curSeg && segs.includes(curSeg)) segSel.value = curSeg;
   }
 
-  // Fetches fresh Users/Products in the background and silently updates the
-  // cache + dropdowns (preserving whatever the person already selected).
-  // Used both to refresh a cache that's still valid-but-aging, and after a
-  // cold load, so the cache is warm for the next person who opens the form.
   async function refreshUsersAndProductsInBackground() {
     try {
       const [uJson, pJson] = await Promise.all([
@@ -613,13 +598,11 @@
     const cachedProducts = readCache('ppf_products_v1');
 
     if (cachedUsers && cachedProducts) {
-      // Instant path: no network call at all, so this device adds zero load
-      // to the server even if several people open the form at once.
       allUsers    = cachedUsers;
       allProducts = cachedProducts;
       populateDropdowns();
       lb.style.display = 'none';
-      refreshUsersAndProductsInBackground(); // keep it fresh, quietly
+      refreshUsersAndProductsInBackground();
       return;
     }
 
@@ -653,12 +636,83 @@
     }
   }
 
-  // ── Name → autofill Email + Department ───────────────
+  // ── Sales-entry stock restriction ──────────────────────
+  // Each person's Entry Type (from the User sheet's Department column)
+  // decides which tab their submissions save to: Opening Stock, Sales,
+  // Stock In or Stock Out. When it's "Sales", the Product list is narrowed
+  // to only products with stock left (per the "Current Stock" sheet — a
+  // live, sheet-formula-maintained running balance, not scoped to any
+  // date), and Quantity defaults to / is capped at whatever remains,
+  // minus anything already staged for that product in this batch.
+  let currentEntryType   = '';
+  let salesStockMap      = {}; // "segment||product" → current Quantity from Current Stock sheet
+  let stockLoaded        = false;
+
+  function isSalesEntry() {
+    return currentEntryType.trim().toLowerCase() === 'sales';
+  }
+
+  function stockKey(segment, product) {
+    return `${segment}||${product}`;
+  }
+
+  function stagedQtyFor(segment, product, excludeIdx) {
+    return stagedEntries.reduce((sum, e, idx) => {
+      if (idx === excludeIdx) return sum;
+      if (e.segment === segment && e.product === product) return sum + (Number(e.quantity) || 0);
+      return sum;
+    }, 0);
+  }
+
+  function availableStockFor(segment, product, excludeIdx) {
+    const key = stockKey(segment, product);
+    const raw = salesStockMap.hasOwnProperty(key) ? salesStockMap[key] : 0;
+    return Math.max(0, raw - stagedQtyFor(segment, product, excludeIdx));
+  }
+
+  async function refreshSalesStock() {
+    if (!isSalesEntry()) return;
+    try {
+      const json = await safeFetch(`${GAS_URL}?action=getCurrentStock`, 2);
+      salesStockMap = {};
+      (json.rows || []).forEach(r => {
+        salesStockMap[stockKey(r.segment, r.product)] = Number(r.quantity) || 0;
+      });
+      stockLoaded = true;
+    } catch (e) {
+      salesStockMap = {};
+      stockLoaded = false;
+      toast('Could not load current stock — ' + e.message, 'fail');
+    }
+    onSegmentChange(true);
+  }
+
+  // ── Name → autofill Email + Entry Type (hidden) ───────
   function onNameChange() {
     const val  = document.getElementById('name').value;
     const user = allUsers.find(u => u.name === val);
     document.getElementById('email').value      = user ? user.email : '';
     document.getElementById('department').value = user ? user.dept  : '';
+    currentEntryType = user ? (user.dept || '') : '';
+
+    const pill = document.getElementById('entryTypePill');
+    if (currentEntryType) {
+      pill.textContent  = currentEntryType.toUpperCase();
+      pill.style.display = 'inline-block';
+    } else {
+      pill.style.display = 'none';
+    }
+
+    const badge = document.getElementById('stockRefreshBadge');
+    if (isSalesEntry()) {
+      badge.style.display = 'inline-block';
+      refreshSalesStock();
+    } else {
+      badge.style.display = 'none';
+      salesStockMap = {};
+      stockLoaded = false;
+      onSegmentChange(true);
+    }
   }
 
   function escapeHtmlLocal(str) {
@@ -669,21 +723,36 @@
   }
 
   // ── Segment → enable/populate Product combobox ──────
-  function onSegmentChange() {
+  // preserveProduct=true keeps whatever Segment/Product is already picked
+  // (used when re-running this just because sales stock refreshed) instead
+  // of clearing the fields.
+  function onSegmentChange(preserveProduct) {
     const seg  = document.getElementById('segment').value;
     const inp  = document.getElementById('product');
     const wrap = document.getElementById('productWrap');
-    inp.value = '';
-    inp.classList.remove('has-value');
-    currentProducts = seg ? allProducts.filter(p => p.segment === seg) : [];
+    const keepVal = preserveProduct ? inp.value : '';
+    if (!preserveProduct) { inp.value = ''; inp.classList.remove('has-value'); }
+
+    let list = seg ? allProducts.filter(p => p.segment === seg) : [];
+    if (isSalesEntry()) {
+      list = list.filter(p => availableStockFor(p.segment, p.product) > 0);
+    }
+    currentProducts = list;
+
     if (!seg) {
       inp.disabled = true;
       wrap.classList.add('combo-disabled');
     } else {
       inp.disabled = false;
       wrap.classList.remove('combo-disabled');
-      inp.placeholder = 'Type or pick a product…';
+      inp.placeholder = isSalesEntry() ? 'Select a product in stock…' : 'Type or pick a product…';
     }
+
+    if (preserveProduct && keepVal) {
+      inp.value = keepVal;
+      applyQuantityCap(seg, keepVal, null, true);
+    }
+
     closeDropdown();
   }
 
@@ -697,16 +766,21 @@
       ? currentProducts.filter(p => p.product.toLowerCase().includes(filter.toLowerCase()))
       : currentProducts;
     if (!list.length) {
-      dd.innerHTML = '<div class="combo-empty">No products found</div>';
+      dd.innerHTML = isSalesEntry()
+        ? '<div class="combo-empty">No stock available for this segment</div>'
+        : '<div class="combo-empty">No products found</div>';
     } else {
       dd.innerHTML = list.map((p, i) => {
         const name = filter
           ? p.product.replace(new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'),
               '<strong>$1</strong>')
           : p.product;
+        const stockNote = isSalesEntry()
+          ? ` <span style="color:var(--muted);font-size:11.5px;">— Avail: ${availableStockFor(p.segment, p.product)}</span>`
+          : '';
         return `<div class="combo-item" data-val="${p.product}" data-idx="${i}"
           onmousedown="pickProduct('${p.product.replace(/'/g,"\'")}')">
-          ${name}</div>`;
+          ${name}${stockNote}</div>`;
       }).join('');
     }
     dd.classList.add('open');
@@ -718,7 +792,28 @@
     inp.value = val;
     inp.classList.add('has-value');
     closeDropdown();
+    applyQuantityCap(document.getElementById('segment').value, val, null);
     document.getElementById('quantity').focus();
+  }
+
+  // Sets Quantity's max for a Sales entry (capped at remaining stock) and
+  // clears any cap otherwise. By default also resets Quantity's value to
+  // the available stock; pass keepValue=true to leave an existing value
+  // alone (used when re-opening a staged entry for editing).
+  function applyQuantityCap(segment, product, excludeIdx, keepValue) {
+    const qtyInp = document.getElementById('quantity');
+    const hint   = document.getElementById('stockHint');
+    if (isSalesEntry() && segment && product) {
+      const avail = availableStockFor(segment, product, excludeIdx);
+      qtyInp.max = avail;
+      if (!keepValue) qtyInp.value = avail;
+      hint.textContent  = `Max available: ${avail}`;
+      hint.style.display = 'block';
+    } else {
+      qtyInp.removeAttribute('max');
+      hint.style.display = 'none';
+      hint.textContent = '';
+    }
   }
 
   function closeDropdown() {
@@ -739,7 +834,6 @@
   }
 
   function onProductBlur() {
-    // Slight delay so mousedown on item fires first
     setTimeout(closeDropdown, 150);
   }
 
@@ -764,12 +858,9 @@
     if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
   }
 
-  // ── Staged entries: products added to this batch, not yet submitted ──
-  // Workflow: pick Segment/Product/Quantity → Add → repeat for each product
-  // → optionally click Edit on any added item to correct it → Submit Entry
-  // sends every staged item to the server in one go.
+  // ── Staged entries ──────────────────────────────────────
   let stagedEntries      = [];   // [{date, name, email, department, segment, product, quantity}]
-  let editingStagedIndex = null; // index into stagedEntries being edited, or null
+  let editingStagedIndex = null;
 
   function addOrUpdateStagedEntry() {
     const fields = [
@@ -787,11 +878,23 @@
       }
     }
 
+    if (isSalesEntry()) {
+      const seg   = document.getElementById('segment').value;
+      const prod  = document.getElementById('product').value;
+      const qty   = Number(document.getElementById('quantity').value) || 0;
+      const avail = availableStockFor(seg, prod, editingStagedIndex);
+      if (qty > avail) {
+        document.getElementById('quantity').focus();
+        toast(`Only ${avail} in stock for ${prod} — reduce the quantity`, 'fail');
+        return;
+      }
+    }
+
     const entry = {
       date:       document.getElementById('date').value,
       name:       document.getElementById('name').value,
       email:      document.getElementById('email').value,
-      department: document.getElementById('department').value,
+      department: document.getElementById('department').value, // this IS the Entry Type
       segment:    document.getElementById('segment').value,
       product:    document.getElementById('product').value,
       quantity:   Number(document.getElementById('quantity').value) || 0
@@ -806,11 +909,10 @@
       toast('Added to your list ✓', 'success');
     }
 
-    // Clear Segment/Product/Quantity for the next product; Date & Name stay
-    // as-is since a batch is usually one person filing for one day.
     document.getElementById('segment').value = '';
     onSegmentChange();
     document.getElementById('quantity').value = '';
+    applyQuantityCap(null, null, null);
     document.getElementById('segment').focus();
 
     renderStagedEntries();
@@ -828,6 +930,7 @@
     document.getElementById('segment').value = '';
     onSegmentChange();
     document.getElementById('quantity').value = '';
+    applyQuantityCap(null, null, null);
     renderStagedEntries();
   }
 
@@ -844,6 +947,11 @@
     const segSel = document.getElementById('segment');
     segSel.value = entry.segment;
     currentProducts = entry.segment ? allProducts.filter(p => p.segment === entry.segment) : [];
+    if (isSalesEntry()) {
+      currentProducts = currentProducts.filter(p =>
+        p.product === entry.product || availableStockFor(p.segment, p.product, idx) > 0
+      );
+    }
     const prodInp  = document.getElementById('product');
     const prodWrap = document.getElementById('productWrap');
     if (entry.segment) {
@@ -853,6 +961,7 @@
     prodInp.value = entry.product;
     prodInp.classList.add('has-value');
     document.getElementById('quantity').value = entry.quantity;
+    applyQuantityCap(entry.segment, entry.product, idx, true);
 
     document.getElementById('editBannerIdx').textContent = idx + 1;
     document.getElementById('editBanner').classList.add('visible');
@@ -867,10 +976,10 @@
     stagedEntries.splice(idx, 1);
     if (editingStagedIndex === idx) {
       cancelStagedEdit();
-      return; // cancelStagedEdit() already re-renders
+      return;
     }
     if (editingStagedIndex !== null && editingStagedIndex > idx) {
-      editingStagedIndex -= 1; // shift so it still points at the same item
+      editingStagedIndex -= 1;
     }
     renderStagedEntries();
   }
@@ -886,15 +995,14 @@
     }
     submitBtn.disabled = false;
 
-    // Flag duplicates: same product + same quantity added more than once.
-    const dupKey = e => (e.product || '').trim().toLowerCase() + '|' + e.quantity;
+    const dupKeyLocal = e => (e.product || '').trim().toLowerCase() + '|' + e.quantity;
     const dupCount = {};
-    stagedEntries.forEach(e => { const k = dupKey(e); dupCount[k] = (dupCount[k] || 0) + 1; });
+    stagedEntries.forEach(e => { const k = dupKeyLocal(e); dupCount[k] = (dupCount[k] || 0) + 1; });
     const hasDup = Object.values(dupCount).some(c => c > 1);
 
     const total = stagedEntries.reduce((sum, e) => sum + (Number(e.quantity) || 0), 0);
     const listHtml = stagedEntries.map((e, idx) => {
-      const isDup = dupCount[dupKey(e)] > 1;
+      const isDup = dupCount[dupKeyLocal(e)] > 1;
       const isEditing = editingStagedIndex === idx;
       return `
       <div class="entry-item${isDup ? ' entry-dup' : ''}${isEditing ? ' selected' : ''}" style="cursor:default;">
@@ -922,16 +1030,25 @@
       </div>`;
   }
 
-  // Posts ALL entries to the backend in a single batch request.
-  // Uses fetch with Content-Type: text/plain — this avoids the CORS preflight
-  // that causes GAS to redirect POST → GET → return HTML instead of JSON.
+  // Posts ALL entries to the backend in one batch request. The server
+  // groups them by Entry Type (department) and appends each group to the
+  // matching tab (Opening Stock / Sales / Stock In / Stock Out).
   async function postBatch(entries, retries = 3) {
+    const payload = entries.map(e => ({
+      date:      e.date,
+      name:      e.name,
+      email:     e.email,
+      entryType: e.department,
+      segment:   e.segment,
+      product:   e.product,
+      quantity:  e.quantity
+    }));
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const res = await fetch(GAS_URL, {
           method:  'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body:    JSON.stringify({ action: 'batch', entries })
+          body:    JSON.stringify({ action: 'batch', entries: payload })
         });
         const text = await res.text();
         const json = parseGasResponse(text);
@@ -939,13 +1056,11 @@
         return json;
       } catch (err) {
         if (attempt === retries - 1) throw err;
-        // Jittered backoff: 2–4s so concurrent phones don't all retry at once
         await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
       }
     }
   }
 
-  // ── Submit — sends every staged item to the server, one at a time ──────
   document.getElementById('form').addEventListener('submit', async function (e) {
     e.preventDefault();
 
@@ -968,16 +1083,19 @@
     lbl.textContent = `Submitting ${totalToSubmit} item${totalToSubmit === 1 ? '' : 's'}…`;
 
     try {
-      await postBatch([...stagedEntries]);
-      const count = totalToSubmit;
+      const result = await postBatch([...stagedEntries]);
+      const count = result.inserted != null ? result.inserted : totalToSubmit;
       stagedEntries = [];
       renderStagedEntries();
-      toast(`${count} entr${count === 1 ? 'y' : 'ies'} submitted ✓`, 'success');
+      let msg = `${count} entr${count === 1 ? 'y' : 'ies'} submitted ✓`;
+      if (result.skippedDuplicates) msg += ` (${result.skippedDuplicates} duplicate skipped)`;
+      toast(msg, 'success');
       document.getElementById('segment').value = '';
       onSegmentChange();
       document.getElementById('quantity').value = '';
+      applyQuantityCap(null, null, null);
+      if (isSalesEntry()) refreshSalesStock(); // stock just moved — refresh it
     } catch (err) {
-      // All entries stay staged — user can retry without re-entering
       renderStagedEntries();
       toast(`Submit failed — ${err.message}`, 'fail');
     }
@@ -1006,6 +1124,12 @@
     document.getElementById('productWrap').classList.add('combo-disabled');
     closeDropdown();
     document.getElementById('quantity').value   = '';
+    currentEntryType = '';
+    salesStockMap    = {};
+    stockLoaded      = false;
+    document.getElementById('entryTypePill').style.display = 'none';
+    document.getElementById('stockRefreshBadge').style.display = 'none';
+    applyQuantityCap(null, null, null);
     exitStagedEditMode();
     renderStagedEntries();
   }
