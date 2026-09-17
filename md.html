@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Stock — My Dream Foods Limited</title>
+<title>Production Planning — My Dream Foods</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -375,13 +375,13 @@
     <div class="card" id="uploadCard" style="display:none;">
       <div class="card-head"><span class="card-head-dot"></span> Upload Current Stock (prefill Opening Stock)</div>
       <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:12px;">
-        Upload the <strong>Excel</strong> file downloaded from the dashboard's Current Stock table — its
+        Upload the <strong>Excel or CSV</strong> file downloaded from the dashboard's Current Stock table — its
         <strong>Current Stock</strong> column (yesterday's closing balance) is filled in below as
         <strong>Opening Stock</strong> for the date above. Review the numbers before submitting — nothing
         is saved until you press Submit. (PDF isn't accepted here since a PDF table can't be parsed reliably;
-        use the Excel export instead.)
+        use the Excel or CSV export instead.)
       </p>
-      <input type="file" id="openingStockUpload" accept=".xlsx,.xls" onchange="handleOpeningStockUpload(event)"/>
+      <input type="file" id="openingStockUpload" accept=".xlsx,.xls,.xlsm,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onchange="handleOpeningStockUpload(event)"/>
       <div id="uploadStatus" style="font-size:12px;color:var(--muted);margin-top:9px;"></div>
     </div>
 
@@ -753,10 +753,16 @@
     }
 
     statusEl.textContent = 'Reading file…';
+    const isCsv = /\.csv$/i.test(file.name) || file.type === 'text/csv';
     const reader = new FileReader();
     reader.onload = function (e) {
       try {
-        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        // CSV is read as plain text (type:'string') rather than sniffed
+        // from raw bytes — reliable regardless of encoding quirks. Excel
+        // formats (.xlsx/.xls/.xlsm) are read as a binary workbook.
+        const wb = isCsv
+          ? XLSX.read(e.target.result, { type: 'string' })
+          : XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
         const sheetName = wb.SheetNames.indexOf('Current Stock') !== -1 ? 'Current Stock' : wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
@@ -772,7 +778,8 @@
       statusEl.textContent = '⚠ Could not read file.';
       event.target.value = '';
     };
-    reader.readAsArrayBuffer(file);
+    if (isCsv) reader.readAsText(file);
+    else       reader.readAsArrayBuffer(file);
   }
 
   function applyOpeningStockUpload(rows) {
@@ -926,7 +933,7 @@
   // Posts ALL entries to the backend in one batch request. The server
   // groups them by Entry Type (department) and appends each group to the
   // matching tab (Opening Stock / Stock Out / Stock In).
-  async function postBatch(entries, retries = 3) {
+  async function postBatch(entries, retries = 3, onSlow) {
     for (let attempt = 0; attempt < retries; attempt++) {
       const controller = new AbortController();
       // A plain fetch() never times out on its own — for a big batch or a
@@ -934,6 +941,11 @@
       // generous 2 minutes before giving up and letting the retry loop
       // (or the user) try again, rather than spinning forever.
       const killer = setTimeout(() => controller.abort(), 120000);
+      // Apps Script can genuinely take a while under load — a cold start,
+      // a big sheet, or another submission holding the lock while it
+      // finishes its own duplicate check. That's slow, not stuck, so
+      // surface it instead of leaving the button looking frozen.
+      const slowTimer = setTimeout(() => { if (onSlow) onSlow(attempt); }, 6000);
       try {
         const res = await fetch(GAS_URL, {
           method:  'POST',
@@ -952,6 +964,7 @@
         await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
       } finally {
         clearTimeout(killer);
+        clearTimeout(slowTimer);
       }
     }
   }
@@ -1000,8 +1013,16 @@
     btn.disabled = true;
     lbl.textContent = `Submitting ${entries.length} item${entries.length === 1 ? '' : 's'}…`;
 
+    let slowStage = 0;
+    const onSlow = () => {
+      slowStage++;
+      lbl.textContent = slowStage === 1
+        ? 'Still saving… the sheet can take a bit longer when it\'s busy'
+        : 'Still trying — please keep this tab open';
+    };
+
     try {
-      const result = await postBatch(entries);
+      const result = await postBatch(entries, 3, onSlow);
       const count = result.inserted != null ? result.inserted : entries.length;
       qtyMap = {};
       let msg = `${count} entr${count === 1 ? 'y' : 'ies'} submitted ✓`;
