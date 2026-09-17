@@ -181,7 +181,8 @@
   .btn-reset-filter:hover { border-color: var(--muted); color: var(--text); }
 
   /* ── KPI Cards ── */
-  .kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(4, 1fr); }
   .kpi {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--border-r); padding: 18px 20px;
@@ -256,8 +257,7 @@
   .dept-badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; }
   .dept-opening-stock { background: var(--accent-s);  color: var(--accent); }
   .dept-stock-in      { background: var(--green-s);   color: var(--green); }
-  .dept-stock-out     { background: var(--orange-s);  color: var(--orange); }
-  .dept-sales         { background: var(--red-s);     color: var(--red); }
+  .dept-stock-out     { background: var(--red-s);     color: var(--red); }
   .dept-other         { background: var(--surface2);  color: var(--muted); }
 
   /* ── Empty / Loading ── */
@@ -278,6 +278,8 @@
 
   @media(max-width:1100px) { .kpi-grid { grid-template-columns: repeat(3,1fr); } }
   @media(max-width:900px)  { .kpi-grid { grid-template-columns: repeat(2,1fr); } .charts-row { grid-template-columns: 1fr; } }
+  @media(max-width:1100px) { .kpi-grid.kpi-grid-4 { grid-template-columns: repeat(2,1fr); } }
+  @media(max-width:560px)  { .kpi-grid.kpi-grid-4 { grid-template-columns: 1fr; } }
   @media(max-width:600px)  { .topbar { padding: 0 16px; } .page { padding: 16px 12px 60px; } }
 
   /* ── Negative-stock modal ── */
@@ -343,6 +345,11 @@
         <span class="side-icon">📦</span> Current Stock
       </div>
     </div>
+    <div class="side-group" id="sideGroupOldStock">
+      <div class="side-link" id="sideLinkOldStock" onclick="showView('oldstock')">
+        <span class="side-icon">📅</span> Old Stock
+      </div>
+    </div>
     <div class="side-group open" id="sideGroupEntries">
       <div class="side-link" id="sideLinkEntries" onclick="toggleEntriesGroup()">
         <span class="side-icon">📄</span> All Entries
@@ -351,8 +358,7 @@
       <div class="side-children">
         <div class="side-child" data-tab="Opening Stock" onclick="showView('entries', 'Opening Stock')">🔵 Opening Stock</div>
         <div class="side-child" data-tab="Stock In" onclick="showView('entries', 'Stock In')">🟢 Stock In</div>
-        <div class="side-child" data-tab="Stock Out" onclick="showView('entries', 'Stock Out')">🟠 Stock Out</div>
-        <div class="side-child" data-tab="Sales" onclick="showView('entries', 'Sales')">🔴 Sales Entry</div>
+        <div class="side-child" data-tab="Stock Out" onclick="showView('entries', 'Stock Out')">🔴 Stock Out</div>
       </div>
     </div>
   </div>
@@ -382,16 +388,10 @@
         <div class="kpi-sub">Total units added</div>
       </div>
       <div class="kpi red">
-        <div class="kpi-icon">🛒</div>
-        <div class="kpi-label">Sales</div>
-        <div class="kpi-val" id="kSales">—</div>
-        <div class="kpi-sub">Total units sold</div>
-      </div>
-      <div class="kpi orange">
-        <div class="kpi-icon">⬆️</div>
+        <div class="kpi-icon">📤</div>
         <div class="kpi-label">Stock Out</div>
         <div class="kpi-val" id="kStockOut">—</div>
-        <div class="kpi-sub">Total units removed</div>
+        <div class="kpi-sub">Total units out</div>
       </div>
       <div class="kpi teal">
         <div class="kpi-icon">🏪</div>
@@ -458,15 +458,92 @@
               <th onclick="sortStock('product')" id="s-sort-product">Product <span class="sort-icon">↕</span></th>
               <th onclick="sortStock('opStock')" id="s-sort-opStock" style="text-align:right;color:#3b82f6;">Op Stock <span class="sort-icon">↕</span></th>
               <th onclick="sortStock('stockIn')" id="s-sort-stockIn" style="text-align:right;color:#22c55e;">Stock In <span class="sort-icon">↕</span></th>
-              <th onclick="sortStock('sales')" id="s-sort-sales" style="text-align:right;color:#ef4444;">Sales <span class="sort-icon">↕</span></th>
-              <th onclick="sortStock('stockOut')" id="s-sort-stockOut" style="text-align:right;color:#f97316;">Stock Out <span class="sort-icon">↕</span></th>
-              <th onclick="sortStock('quantity')" id="s-sort-quantity" style="text-align:right;color:#0d9488;">Current Qty <span class="sort-icon">↕</span></th>
+              <th onclick="sortStock('stockOut')" id="s-sort-stockOut" style="text-align:right;color:#ef4444;">Stock Out <span class="sort-icon">↕</span></th>
+              <th onclick="sortStock('quantity')" id="s-sort-quantity" style="text-align:right;color:#0d9488;">Current Stock <span class="sort-icon">↕</span></th>
             </tr>
           </thead>
           <tbody id="stockBody">
-            <tr><td colspan="7"><div class="state-box"><div class="spin"></div>Loading…</div></td></tr>
+            <tr><td colspan="6"><div class="state-box"><div class="spin"></div>Loading…</div></td></tr>
           </tbody>
           <tfoot id="stockFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ OLD STOCK (date-wise) VIEW ═══ -->
+  <div id="oldStockSection" style="display:none;">
+
+    <div class="filters" style="margin-bottom:12px;">
+      <div class="filter-field">
+        <label>Date</label>
+        <input type="date" id="osDate" onchange="renderOldStock()"/>
+      </div>
+      <div class="filter-field" style="min-width:200px;">
+        <label>Product</label>
+        <input type="text" id="osProduct" class="ftext" placeholder="All Products" autocomplete="off" oninput="renderOldStock()"/>
+      </div>
+      <div class="filter-field">
+        <label>Segment</label>
+        <select id="osSegment" onchange="renderOldStock()">
+          <option value="">All Segments</option>
+        </select>
+      </div>
+      <button class="btn-reset-filter" onclick="resetOldStockFilters()">✕ Clear</button>
+    </div>
+
+    <div class="kpi-grid kpi-grid-4">
+      <div class="kpi blue">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-label">Opening Stock</div>
+        <div class="kpi-val" id="kOSOpStock">—</div>
+        <div class="kpi-sub">On selected date</div>
+      </div>
+      <div class="kpi green">
+        <div class="kpi-icon">⬇️</div>
+        <div class="kpi-label">Stock In</div>
+        <div class="kpi-val" id="kOSStockIn">—</div>
+        <div class="kpi-sub">On selected date</div>
+      </div>
+      <div class="kpi red">
+        <div class="kpi-icon">📤</div>
+        <div class="kpi-label">Stock Out</div>
+        <div class="kpi-val" id="kOSStockOut">—</div>
+        <div class="kpi-sub">On selected date</div>
+      </div>
+      <div class="kpi teal">
+        <div class="kpi-icon">🏪</div>
+        <div class="kpi-label">Current Stock</div>
+        <div class="kpi-val" id="kOSQty">—</div>
+        <div class="kpi-sub">Op Stock + Stock In − Stock Out</div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-head">
+        <span class="table-title">Old Stock</span>
+        <span class="row-count" id="osRowCount">0 products</span>
+        <div style="margin-left:auto;display:flex;gap:8px;">
+          <button class="btn-refresh" onclick="exportOldStockExcel()">⬇ Excel</button>
+          <button class="btn-refresh" onclick="exportOldStockPDF()">⬇ PDF</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortOldStock('segment')" id="os-sort-segment">Segment <span class="sort-icon">↕</span></th>
+              <th onclick="sortOldStock('product')" id="os-sort-product">Product <span class="sort-icon">↕</span></th>
+              <th onclick="sortOldStock('opStock')" id="os-sort-opStock" style="text-align:right;color:#3b82f6;">Op Stock <span class="sort-icon">↕</span></th>
+              <th onclick="sortOldStock('stockIn')" id="os-sort-stockIn" style="text-align:right;color:#22c55e;">Stock In <span class="sort-icon">↕</span></th>
+              <th onclick="sortOldStock('stockOut')" id="os-sort-stockOut" style="text-align:right;color:#ef4444;">Stock Out <span class="sort-icon">↕</span></th>
+              <th onclick="sortOldStock('quantity')" id="os-sort-quantity" style="text-align:right;color:#0d9488;">Current Stock <span class="sort-icon">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="osBody">
+            <tr><td colspan="6"><div class="state-box">Pick a date above to see that day's stock</div></td></tr>
+          </tbody>
+          <tfoot id="osFoot"></tfoot>
         </table>
       </div>
     </div>
@@ -548,7 +625,7 @@
     </div>
     <div class="modal-body">
       <table class="neg-table">
-        <thead><tr><th>Segment</th><th>Product</th><th>Current Qty</th></tr></thead>
+        <thead><tr><th>Segment</th><th>Product</th><th>Current Stock</th></tr></thead>
         <tbody id="negativeStockBody"></tbody>
       </table>
     </div>
@@ -566,7 +643,7 @@ let entrySortCol = 'date', entrySortDir = 1;
 let barChart, doughnutChart;
 
 // ── Sidebar / view state ──────────────────────────────
-let currentView = 'stock';   // 'stock' | 'entries'
+let currentView = 'stock';   // 'stock' | 'oldstock' | 'entries'
 let entriesTab  = null;      // null = all, else one of the ENTRY_TABS names
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
@@ -576,10 +653,12 @@ function showView(view, tab) {
   currentView = view;
   entriesTab  = tab || null;
 
-  document.getElementById('stockSection').style.display   = view === 'stock'   ? '' : 'none';
-  document.getElementById('entriesSection').style.display = view === 'entries' ? '' : 'none';
+  document.getElementById('stockSection').style.display    = view === 'stock'    ? '' : 'none';
+  document.getElementById('oldStockSection').style.display  = view === 'oldstock' ? '' : 'none';
+  document.getElementById('entriesSection').style.display  = view === 'entries'  ? '' : 'none';
 
   document.getElementById('sideLinkStock').classList.toggle('active', view === 'stock');
+  document.getElementById('sideLinkOldStock').classList.toggle('active', view === 'oldstock');
   document.getElementById('sideLinkEntries').classList.toggle('active', view === 'entries' && !tab);
   document.querySelectorAll('.side-child').forEach(el =>
     el.classList.toggle('active', view === 'entries' && el.dataset.tab === tab)
@@ -590,7 +669,26 @@ function showView(view, tab) {
   badge.textContent = tab || '';
   badge.style.display = tab ? 'inline-block' : 'none';
 
-  if (view === 'entries') renderEntries();
+  if (view === 'entries')  renderEntries();
+  if (view === 'oldstock') renderOldStock();
+}
+
+// Google intercepts the request before it reaches doGet() (usually because
+// the deployment's "Who has access" requires a signed-in Google account the
+// visitor isn't logged into, or a Google error page) and serves an HTML
+// page instead of JSON. That page always starts with <!DOCTYPE or <html —
+// detect it and surface a message that actually points at the fix instead
+// of dumping raw markup.
+function parseGasResponse(responseText) {
+  const trimmed = (responseText || '').trim();
+  if (/^<!DOCTYPE|^<html/i.test(trimmed)) {
+    throw new Error('Blocked by Google sign-in — ask your admin to set the Apps Script deployment access to "Anyone", and make sure it was redeployed after the last script change');
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch (e) {
+    throw new Error('Unexpected response: ' + trimmed.slice(0, 80));
+  }
 }
 
 // ── XHR helper ────────────────────────────────────────
@@ -602,8 +700,8 @@ function xhrGet(url, onSlow) {
     const slowTimer = setTimeout(() => { if (onSlow) onSlow(); }, 10000);
     xhr.onload = () => {
       clearTimeout(slowTimer);
-      try { resolve(JSON.parse(xhr.responseText)); }
-      catch(e) { reject(new Error('Invalid response: ' + xhr.responseText.slice(0, 80))); }
+      try { resolve(parseGasResponse(xhr.responseText)); }
+      catch(e) { reject(e); }
     };
     xhr.onerror   = () => { clearTimeout(slowTimer); reject(new Error('Network error')); };
     xhr.ontimeout = () => { clearTimeout(slowTimer); reject(new Error('Server timed out — try again')); };
@@ -643,9 +741,11 @@ async function loadData() {
     stockRows = stockJson.rows || [];
     entryRows = entriesJson.rows || [];
     buildStockFilters();
+    buildOldStockFilters();
     buildEntriesFilters();
     renderStock();
-    if (currentView === 'entries') renderEntries();
+    if (currentView === 'entries')  renderEntries();
+    if (currentView === 'oldstock') renderOldStock();
     document.getElementById('lastRefresh').textContent =
       'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   } catch (err) {
@@ -720,6 +820,9 @@ function getStockFiltered() {
   const seg  = document.getElementById('fSegment').value;
   const prod = document.getElementById('fProduct').value;
   return stockRows.filter(r => {
+    // Hide rows where Current Stock, Op Stock, Stock Out and Stock In are
+    // all 0 — nothing ever happened for this product, so there's nothing to show.
+    if (!(r.quantity || r.opStock || r.stockOut || r.stockIn)) return false;
     if (seg  && r.segment !== seg)  return false;
     if (prod && r.product !== prod) return false;
     return true;
@@ -763,14 +866,12 @@ function renderStock() {
   const tot = rows.reduce((a, r) => ({
     opStock:  a.opStock  + (r.opStock  || 0),
     stockIn:  a.stockIn  + (r.stockIn  || 0),
-    sales:    a.sales    + (r.sales    || 0),
     stockOut: a.stockOut + (r.stockOut || 0),
     quantity: a.quantity + (r.quantity || 0)
-  }), { opStock:0, stockIn:0, sales:0, stockOut:0, quantity:0 });
+  }), { opStock:0, stockIn:0, stockOut:0, quantity:0 });
 
   document.getElementById('kOpStock').textContent  = fmt(tot.opStock);
   document.getElementById('kStockIn').textContent  = fmt(tot.stockIn);
-  document.getElementById('kSales').textContent    = fmt(tot.sales);
   document.getElementById('kStockOut').textContent = fmt(tot.stockOut);
   document.getElementById('kQty').textContent      = fmt(tot.quantity);
 
@@ -799,7 +900,7 @@ function renderStock() {
 
   const tbody = document.getElementById('stockBody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="state-box">No data</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="state-box">No data</div></td></tr>';
     document.getElementById('stockFoot').innerHTML = '';
   } else {
     tbody.innerHTML = rows.map(r => {
@@ -809,8 +910,7 @@ function renderStock() {
         <td><strong>${r.product}</strong></td>
         <td class="num" style="color:#3b82f6">${r.opStock  ? fmt(r.opStock)  : '—'}</td>
         <td class="num" style="color:#22c55e">${r.stockIn  ? fmt(r.stockIn)  : '—'}</td>
-        <td class="num" style="color:#ef4444">${r.sales    ? fmt(r.sales)    : '—'}</td>
-        <td class="num" style="color:#f97316">${r.stockOut ? fmt(r.stockOut) : '—'}</td>
+        <td class="num" style="color:#ef4444">${r.stockOut ? fmt(r.stockOut) : '—'}</td>
         <td class="num ${qtyCls}">${fmt(r.quantity)}</td>
       </tr>`;
     }).join('');
@@ -822,8 +922,7 @@ function renderStock() {
       <td style="${fLabel}" colspan="2">TOTAL</td>
       <td style="${fNum};color:#3b82f6">${fmt(tot.opStock)}</td>
       <td style="${fNum};color:#22c55e">${fmt(tot.stockIn)}</td>
-      <td style="${fNum};color:#ef4444">${fmt(tot.sales)}</td>
-      <td style="${fNum};color:#f97316">${fmt(tot.stockOut)}</td>
+      <td style="${fNum};color:#ef4444">${fmt(tot.stockOut)}</td>
       <td style="${fNum};color:${tot.quantity < 0 ? '#ef4444' : '#0d9488'}">${fmt(tot.quantity)}</td>
     </tr>`;
   }
@@ -839,7 +938,7 @@ function renderCharts(rows) {
     data: {
       labels: rows.map(r => r.product),
       datasets: [{
-        label: 'Current Qty',
+        label: 'Current Stock',
         data: rows.map(r => r.quantity),
         backgroundColor: rows.map(r => r.quantity < 0 ? 'rgba(239,68,68,0.7)' : 'rgba(13,148,136,0.7)'),
         borderColor: rows.map(r => r.quantity < 0 ? '#ef4444' : '#0d9488'),
@@ -857,13 +956,13 @@ function renderCharts(rows) {
   });
 
   const totIn  = rows.reduce((s,r) => s + (r.opStock||0) + (r.stockIn||0), 0);
-  const totOut = rows.reduce((s,r) => s + (r.sales||0) + (r.stockOut||0), 0);
+  const totOut = rows.reduce((s,r) => s + (r.stockOut||0), 0);
   const dCtx = document.getElementById('chartDoughnut').getContext('2d');
   if (doughnutChart) doughnutChart.destroy();
   doughnutChart = new Chart(dCtx, {
     type: 'doughnut',
     data: {
-      labels: ['In (Op Stock + Stock In)', 'Out (Sales + Stock Out)'],
+      labels: ['In (Op Stock + Stock In)', 'Stock Out'],
       datasets: [{
         data: [totIn, totOut],
         backgroundColor: ['rgba(34,197,94,0.8)', 'rgba(239,68,68,0.8)'],
@@ -890,20 +989,20 @@ function showNegativeStockPopup() {
 function closeNegativeStockPopup() { document.getElementById('negativeStockModal').style.display = 'none'; }
 
 function setStockLoading() {
-  document.getElementById('stockBody').innerHTML = `<tr><td colspan="7"><div class="state-box"><div class="spin"></div>Loading…</div></td></tr>`;
+  document.getElementById('stockBody').innerHTML = `<tr><td colspan="6"><div class="state-box"><div class="spin"></div>Loading…</div></td></tr>`;
   document.getElementById('stockRowCount').textContent = '—';
 }
 function setStockEmpty(msg) {
-  document.getElementById('stockBody').innerHTML = `<tr><td colspan="7"><div class="state-box">${msg}</div></td></tr>`;
+  document.getElementById('stockBody').innerHTML = `<tr><td colspan="6"><div class="state-box">${msg}</div></td></tr>`;
   document.getElementById('stockRowCount').textContent = '0 products';
 }
 
 // ── Export Current Stock (whatever's currently filtered + sorted) ─────
-const STOCK_EXPORT_HEADERS = ['Segment', 'Product', 'Op Stock', 'Stock In', 'Sales', 'Stock Out', 'Current Qty'];
+const STOCK_EXPORT_HEADERS = ['Segment', 'Product', 'Op Stock', 'Stock In', 'Stock Out', 'Current Stock'];
 
 function stockExportRows() {
   return lastStockRows.map(r => [
-    r.segment, r.product, r.opStock || 0, r.stockIn || 0, r.sales || 0, r.stockOut || 0, r.quantity || 0
+    r.segment, r.product, r.opStock || 0, r.stockIn || 0, r.stockOut || 0, r.quantity || 0
   ]);
 }
 
@@ -911,7 +1010,7 @@ function exportStockExcel() {
   if (!lastStockRows.length) { toastStock('Nothing to export'); return; }
   const wsData = [STOCK_EXPORT_HEADERS, ...stockExportRows()];
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols'] = [{wch:16},{wch:32},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14}];
+  ws['!cols'] = [{wch:16},{wch:32},{wch:12},{wch:12},{wch:12},{wch:14}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Current Stock');
   const stamp = new Date().toISOString().slice(0,10);
@@ -951,6 +1050,201 @@ function toastStock(msg) {
   eb.style.color = 'var(--amber)';
   document.getElementById('errMsg').textContent = msg;
   setTimeout(() => { eb.style.display = 'none'; }, 2500);
+}
+
+// ═══════════════════════════ OLD STOCK (date-wise) ═══════════════════════════
+// Unlike Current Stock (read from the live "Current Stock" sheet — no date
+// dimension), Old Stock is computed entirely client-side from entryRows
+// (the raw Opening Stock / Stock In / Stock Out entries, which do carry a
+// Date). For the selected date:
+//   Op Stock  = sum of Opening Stock entries on that date
+//   Stock In  = sum of Stock In entries on that date
+//   Stock Out = sum of Stock Out entries on that date
+//   Current Stock (that date) = Op Stock + Stock In − Stock Out
+let osSortCol = 'quantity', osSortDir = -1;
+let lastOSRows = [];
+
+function isoToDDMMYYYY(iso) {
+  if (!iso) return '';
+  const p = iso.split('-'); // yyyy-mm-dd
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : '';
+}
+
+function todayISO() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function buildOldStockFilters() {
+  const segSel = document.getElementById('osSegment');
+  const curSeg = segSel.value;
+  segSel.innerHTML = '<option value="">All Segments</option>';
+  [...new Set(entryRows.map(r => r.segment).filter(Boolean))].sort().forEach(s => {
+    const o = document.createElement('option');
+    o.value = o.textContent = s;
+    segSel.appendChild(o);
+  });
+  segSel.value = curSeg;
+
+  const dateInp = document.getElementById('osDate');
+  if (!dateInp.value) dateInp.value = todayISO();
+}
+
+function computeOldStockRows(dateStr) {
+  const map = {}; // "segment||product" → { segment, product, opStock, stockIn, stockOut }
+  entryRows.forEach(r => {
+    if (r.date !== dateStr) return;
+    const key = r.segment + '||' + r.product;
+    if (!map[key]) map[key] = { segment: r.segment, product: r.product, opStock: 0, stockIn: 0, stockOut: 0 };
+    if (r.entryType === 'Opening Stock')   map[key].opStock  += (r.quantity || 0);
+    else if (r.entryType === 'Stock In')   map[key].stockIn  += (r.quantity || 0);
+    else if (r.entryType === 'Stock Out')  map[key].stockOut += (r.quantity || 0);
+  });
+  return Object.values(map).map(r => ({
+    ...r,
+    quantity: r.opStock + r.stockIn - r.stockOut // Current Stock as of that date
+  }));
+}
+
+function getOldStockFiltered() {
+  const dateInp = document.getElementById('osDate');
+  if (!dateInp.value) return [];
+  const dateStr = isoToDDMMYYYY(dateInp.value);
+  const seg  = document.getElementById('osSegment').value;
+  const prod = document.getElementById('osProduct').value.trim().toLowerCase();
+
+  let rows = computeOldStockRows(dateStr);
+  rows = rows.filter(r => (r.opStock || r.stockIn || r.stockOut || r.quantity)); // hide all-zero rows
+  if (seg)  rows = rows.filter(r => r.segment === seg);
+  if (prod) rows = rows.filter(r => r.product.toLowerCase().includes(prod));
+  return rows;
+}
+
+function resetOldStockFilters() {
+  document.getElementById('osSegment').value = '';
+  document.getElementById('osProduct').value = '';
+  renderOldStock();
+}
+
+function sortOldStock(col) {
+  if (osSortCol === col) osSortDir *= -1; else { osSortCol = col; osSortDir = -1; }
+  renderOldStock();
+}
+
+function syncOSSortIcons() {
+  document.querySelectorAll('[id^="os-sort-"]').forEach(th => {
+    const icon = th.querySelector('.sort-icon');
+    if (icon) icon.textContent = '↕';
+  });
+  const active = document.getElementById('os-sort-' + osSortCol);
+  if (active) {
+    const icon = active.querySelector('.sort-icon');
+    if (icon) icon.textContent = osSortDir === 1 ? '↑' : '↓';
+  }
+}
+
+function renderOldStock() {
+  const dateInp = document.getElementById('osDate');
+  if (!dateInp.value) dateInp.value = todayISO();
+
+  const rows = getOldStockFiltered();
+
+  const tot = rows.reduce((a, r) => ({
+    opStock:  a.opStock  + (r.opStock  || 0),
+    stockIn:  a.stockIn  + (r.stockIn  || 0),
+    stockOut: a.stockOut + (r.stockOut || 0),
+    quantity: a.quantity + (r.quantity || 0)
+  }), { opStock:0, stockIn:0, stockOut:0, quantity:0 });
+
+  document.getElementById('kOSOpStock').textContent  = fmt(tot.opStock);
+  document.getElementById('kOSStockIn').textContent  = fmt(tot.stockIn);
+  document.getElementById('kOSStockOut').textContent = fmt(tot.stockOut);
+  document.getElementById('kOSQty').textContent      = fmt(tot.quantity);
+
+  rows.sort((a, b) => {
+    let av = a[osSortCol], bv = b[osSortCol];
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    return av < bv ? -osSortDir : av > bv ? osSortDir : 0;
+  });
+  syncOSSortIcons();
+  lastOSRows = rows; // snapshot for Excel/PDF export
+
+  document.getElementById('osRowCount').textContent = rows.length + ' products';
+
+  const tbody = document.getElementById('osBody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="state-box">No entries found for this date</div></td></tr>';
+    document.getElementById('osFoot').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const qtyCls = r.quantity < 0 ? 'qty-neg' : r.quantity > 0 ? 'qty-pos' : 'qty-zero';
+    return `<tr>
+      <td>${r.segment}</td>
+      <td><strong>${r.product}</strong></td>
+      <td class="num" style="color:#3b82f6">${r.opStock  ? fmt(r.opStock)  : '—'}</td>
+      <td class="num" style="color:#22c55e">${r.stockIn  ? fmt(r.stockIn)  : '—'}</td>
+      <td class="num" style="color:#ef4444">${r.stockOut ? fmt(r.stockOut) : '—'}</td>
+      <td class="num ${qtyCls}">${fmt(r.quantity)}</td>
+    </tr>`;
+  }).join('');
+
+  const fStyle = 'padding:10px 14px;font-size:12px;font-weight:700;white-space:nowrap;border-top:2px solid var(--border);background:rgba(255,255,255,0.04)';
+  const fNum   = fStyle + ";font-family:'JetBrains Mono',monospace;text-align:right";
+  const fLabel = fStyle + ";font-family:'Outfit',sans-serif;text-align:left";
+  document.getElementById('osFoot').innerHTML = `<tr>
+    <td style="${fLabel}" colspan="2">TOTAL</td>
+    <td style="${fNum};color:#3b82f6">${fmt(tot.opStock)}</td>
+    <td style="${fNum};color:#22c55e">${fmt(tot.stockIn)}</td>
+    <td style="${fNum};color:#ef4444">${fmt(tot.stockOut)}</td>
+    <td style="${fNum};color:${tot.quantity < 0 ? '#ef4444' : '#0d9488'}">${fmt(tot.quantity)}</td>
+  </tr>`;
+}
+
+// ── Export Old Stock (whatever's currently filtered + sorted) ─────
+const OS_EXPORT_HEADERS = ['Segment', 'Product', 'Op Stock', 'Stock In', 'Stock Out', 'Current Stock'];
+
+function osExportRows() {
+  return lastOSRows.map(r => [
+    r.segment, r.product, r.opStock || 0, r.stockIn || 0, r.stockOut || 0, r.quantity || 0
+  ]);
+}
+
+function exportOldStockExcel() {
+  if (!lastOSRows.length) { toastStock('Nothing to export'); return; }
+  const wsData = [OS_EXPORT_HEADERS, ...osExportRows()];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols'] = [{wch:16},{wch:32},{wch:12},{wch:12},{wch:12},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Old Stock');
+  const dateVal = document.getElementById('osDate').value || todayISO();
+  XLSX.writeFile(wb, `Old_Stock_${dateVal}.xlsx`);
+}
+
+function exportOldStockPDF() {
+  if (!lastOSRows.length) { toastStock('Nothing to export'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  const dateVal = document.getElementById('osDate').value || todayISO();
+  doc.setFontSize(14);
+  doc.text(`Old Stock (${isoToDDMMYYYY(dateVal)}) — My Dream Foods`, 14, 14);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text('Generated ' + new Date().toLocaleString('en-IN'), 14, 20);
+  doc.autoTable({
+    startY: 26,
+    head: [OS_EXPORT_HEADERS],
+    body: osExportRows(),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [59, 130, 246] },
+    columnStyles: {
+      2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+      5: { halign: 'right' }, 6: { halign: 'right', fontStyle: 'bold' }
+    }
+  });
+  doc.save(`Old_Stock_${dateVal}.pdf`);
 }
 
 // ═══════════════════════════ ALL ENTRIES ═══════════════════════════
@@ -1068,7 +1362,6 @@ function deptBadge(entryType) {
   if (d === 'opening stock') cls = 'dept-opening-stock';
   else if (d === 'stock in') cls = 'dept-stock-in';
   else if (d === 'stock out') cls = 'dept-stock-out';
-  else if (d === 'sales') cls = 'dept-sales';
   return `<span class="dept-badge ${cls}">${entryType}</span>`;
 }
 
