@@ -26,11 +26,13 @@
     --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     font-family: 'Outfit', sans-serif;
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    overflow-x: hidden;
   }
 
   /* ── Header ── */
@@ -43,6 +45,7 @@
     align-items: center;
     gap: 12px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    position: sticky; top: 0; z-index: 50;
   }
   .header-mark {
     width: 32px; height: 32px;
@@ -67,9 +70,9 @@
 
   /* ── Layout ── */
   .container {
-    max-width: 640px;
+    max-width: 760px;
     margin: 32px auto;
-    padding: 0 20px 100px;
+    padding: 0 20px 120px;
   }
 
   /* ── Card ── */
@@ -107,7 +110,6 @@
   /* ── Grid ── */
   .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
   .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .g-product { display: grid; grid-template-columns: 160px 1fr 100px; gap: 14px; }
 
   /* ── Field ── */
   .field { display: flex; flex-direction: column; gap: 6px; }
@@ -145,22 +147,6 @@
   select:disabled { opacity: 0.4; cursor: not-allowed; }
   input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
 
-  input[readonly] {
-    background: var(--accent-s);
-    border-color: rgba(37,99,235,0.18);
-    color: var(--accent);
-    font-weight: 500;
-    cursor: default;
-  }
-
-  #quantity {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 16px;
-    font-weight: 500;
-    text-align: center;
-    color: var(--text);
-  }
-
   /* ── Banners ── */
   .banner {
     display: flex; align-items: center; gap: 10px;
@@ -169,6 +155,7 @@
   }
   .banner-load { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
   .banner-err  { background: #fef2f2; border: 1px solid #fecaca; color: var(--error); display: none; }
+  .banner-warn { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; display: none; }
   .spinner {
     width: 14px; height: 14px;
     border: 2px solid #fde68a; border-top-color: #d97706;
@@ -210,13 +197,6 @@
   .btn-submit:hover { background: var(--accent-h); box-shadow: 0 4px 14px rgba(37,99,235,0.36); }
   .btn-submit:active { transform: scale(0.98); }
   .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-  .btn-mini {
-    background: transparent; border: 1px solid var(--border2);
-    color: var(--muted); font-size: 11px; font-weight: 500;
-    padding: 3px 9px; border-radius: 6px;
-    cursor: pointer; font-family: 'Outfit', sans-serif;
-  }
-  .btn-mini:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── Toast ── */
   #toast {
@@ -234,139 +214,103 @@
   #toast.success { background: var(--green); }
   #toast.fail    { background: var(--error); }
 
-  /* ── Product Combobox ── */
-  .combo-wrap { position: relative; }
-  .combo-wrap input { padding-right: 32px; }
-  .combo-wrap input.has-value {
-    border-color: rgba(37,99,235,0.4);
-    background: var(--accent-s);
-    color: var(--accent);
-    font-weight: 500;
-  }
-  .combo-arrow {
-    position: absolute;
-    right: 11px; top: 50%; transform: translateY(-50%);
-    pointer-events: none;
-    color: var(--muted);
-    font-size: 10px;
-    line-height: 1;
-  }
-  .combo-dropdown {
-    position: absolute;
-    top: calc(100% + 4px); left: 0; right: 0;
-    background: var(--surface);
-    border: 1px solid var(--accent);
-    border-radius: 9px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-    z-index: 999;
-    max-height: 220px;
-    overflow-y: auto;
-    display: none;
-  }
-  .combo-dropdown.open { display: block; }
-  .combo-item {
-    padding: 9px 13px;
-    font-size: 13.5px;
-    color: var(--label);
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s;
-  }
-  .combo-item:hover, .combo-item.active {
-    background: var(--accent-s);
-    color: var(--accent);
-  }
-  .combo-item strong { color: var(--accent); font-weight: 600; }
-  .combo-empty {
-    padding: 10px 13px;
-    font-size: 13px;
-    color: var(--muted);
-    font-style: italic;
-  }
-  .combo-disabled .combo-arrow { opacity: 0.3; }
-  .combo-disabled input { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+  /* ── Filter row ── */
+  .filter-row { display: grid; grid-template-columns: 1fr 180px; gap: 10px; margin-bottom: 16px; }
+  .filter-row input, .filter-row select { background: var(--surface2); }
 
-  @media (max-width: 580px) {
-    .g3, .g2, .g-product { grid-template-columns: 1fr; }
-    .header { padding: 0 16px; }
-    .container { margin: 16px auto; }
-    .card { padding: 18px; }
-    .header-pill { display: none; }
-  }
-
-  .entries-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
-  .entry-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 13px;
-    background: var(--surface2);
+  /* ── Product table ── */
+  .ptable-wrap {
     border: 1px solid var(--border);
-    border-radius: 9px;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
+    border-radius: 10px;
+    overflow: hidden;
   }
-  .entry-item:hover { border-color: var(--accent); background: var(--accent-s); }
-  .entry-item.selected { border-color: var(--accent); background: var(--accent-s); }
-  .entry-meta { flex: 1; }
-  .entry-meta strong { font-size: 13px; color: var(--text); display: block; }
-  .entry-meta span   { font-size: 11px; color: var(--muted); }
-  .entry-qty {
+  table.ptable { width: 100%; border-collapse: collapse; }
+  table.ptable thead th {
+    background: var(--surface2);
+    font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted);
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 5;
+    box-shadow: 0 1px 0 var(--border);
+  }
+  table.ptable thead th.col-qty { text-align: center; width: 130px; }
+  table.ptable thead th.col-avail { text-align: center; width: 90px; }
+  table.ptable tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13.5px;
+    vertical-align: middle;
+  }
+  table.ptable tbody tr:last-child td { border-bottom: none; }
+  table.ptable tbody tr:hover { background: var(--accent-s); }
+  table.ptable tbody tr.has-qty { background: var(--green-s); }
+  table.ptable tbody tr.has-qty:hover { background: #e6faec; }
+  .ptable-scroll { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .p-segment { font-size: 11px; color: var(--muted); }
+  .p-name { font-weight: 500; color: var(--text); word-break: break-word; }
+  .p-avail {
+    text-align: center;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 14px; font-weight: 600;
+    font-size: 12.5px; font-weight: 600;
     color: var(--accent);
-    white-space: nowrap;
   }
-  .entry-dept {
-    font-size: 11px; font-weight: 500;
-    padding: 2px 8px; border-radius: 20px;
-    background: var(--accent-s); color: var(--accent);
-    white-space: nowrap;
-  }
-  .entries-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
-
-  .entry-item.entry-dup {
-    background: #fef2f2;
-    border-color: var(--error);
-  }
-  .entry-item.entry-dup .entry-qty { color: var(--error); }
-
-  .entry-actions { display: flex; gap: 6px; flex-shrink: 0; }
-  .entry-action-btn {
-    border: 1px solid var(--border2);
-    background: #fff;
-    color: var(--label);
-    font-size: 11.5px; font-weight: 500;
-    padding: 5px 9px; border-radius: 6px;
-    cursor: pointer;
-    font-family: 'Outfit', sans-serif;
-    white-space: nowrap;
-    transition: all 0.15s;
-  }
-  .entry-edit-btn:hover { background: var(--accent-s); border-color: var(--accent); color: var(--accent); }
-  .entry-delete-btn:hover { background: #fef2f2; border-color: var(--error); color: var(--error); }
-
-  .edit-banner {
-    display: none;
-    background: var(--accent-s);
-    border: 1px solid rgba(37,99,235,0.3);
-    border-radius: 9px;
-    padding: 10px 14px;
-    font-size: 13px; color: var(--accent);
+  .p-avail.zero { color: var(--muted); }
+  .qty-input {
+    width: 100%;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
     font-weight: 500;
-    margin-bottom: 14px;
-    align-items: center; gap: 8px;
+    padding: 7px 8px;
   }
-  .edit-banner.visible { display: flex; }
-  .btn-cancel-edit {
-    margin-left: auto;
-    background: transparent; border: 1px solid rgba(37,99,235,0.4);
-    color: var(--accent); font-size: 12px; font-weight: 500;
-    padding: 4px 12px; border-radius: 6px;
-    cursor: pointer; font-family: 'Outfit', sans-serif;
-  }
-  .btn-cancel-edit:hover { background: rgba(37,99,235,0.08); }
+  .qty-input.over-limit { border-color: var(--error); background: #fef2f2; color: var(--error); }
+  .ptable-empty { padding: 30px; text-align: center; color: var(--muted); font-size: 13px; }
 
-  @media (max-width: 580px) {
-    .entry-item { flex-wrap: wrap; }
-    .entry-actions { width: 100%; justify-content: flex-end; }
+  /* ── Sticky footer summary ── */
+  .summary-bar {
+    position: sticky; bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 0;
+  }
+  .summary-count { font-size: 12.5px; color: var(--muted); }
+  .summary-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; font-weight: 700; color: var(--text);
+  }
+  .summary-total span { color: var(--accent); }
+
+  @media (max-width: 640px) {
+    .g3, .g2, .filter-row { grid-template-columns: 1fr; }
+    .header { padding: 0 14px; height: 50px; }
+    .header h1 { font-size: 14px; }
+    .header p  { font-size: 10.5px; }
+    .container { margin: 14px auto; padding: 0 12px 130px; }
+    .card { padding: 14px; border-radius: 12px; }
+    .card-head { font-size: 10px; margin-bottom: 14px; padding-bottom: 10px; }
+    .header-pill { display: none; }
+    .ptable-scroll { max-height: 56vh; }
+    table.ptable thead th { padding: 9px 8px; font-size: 9.5px; }
+    table.ptable tbody td { padding: 7px 8px; font-size: 13px; }
+    table.ptable thead th.col-avail { width: 56px; }
+    table.ptable thead th.col-qty { width: 84px; }
+    .qty-input { padding: 8px 4px; font-size: 14px; }
+    .p-name { font-size: 13px; }
+    .summary-bar { padding: 12px 14px; flex-wrap: wrap; gap: 6px; }
+    .summary-total { font-size: 14.5px; }
+    .btn-row { flex-direction: column-reverse; gap: 8px; }
+    .btn-row .btn-clear, .btn-row .btn-submit { width: 100%; justify-content: center; }
+  }
+
+  @media (max-width: 360px) {
+    table.ptable thead th.col-avail { width: 46px; }
+    table.ptable thead th.col-qty { width: 74px; }
+    table.ptable thead th, table.ptable tbody td { padding-left: 6px; padding-right: 6px; }
   }
 </style>
 </head>
@@ -391,11 +335,8 @@
     <span id="errMsg">⚠ Failed to load</span>
     <button class="retry-btn" onclick="init()">↺ Retry</button>
   </div>
-
-  <!-- Editing-a-staged-item banner -->
-  <div class="edit-banner" id="editBanner">
-    ✏️ Editing item #<span id="editBannerIdx"></span> in your list — change it below and click Update Item
-    <button class="btn-cancel-edit" onclick="cancelStagedEdit()">✕ Cancel</button>
+  <div class="banner banner-warn" id="warnBanner">
+    <span id="warnMsg"></span>
   </div>
 
   <form id="form" novalidate>
@@ -403,7 +344,7 @@
     <!-- Submission Details -->
     <div class="card">
       <div class="card-head"><span class="card-head-dot"></span> Submission Details</div>
-      <div class="g3" style="margin-bottom:14px;">
+      <div class="g3">
         <div class="field">
           <label>Date <span class="req">*</span></label>
           <input type="date" id="date"/>
@@ -419,51 +360,40 @@
       <input type="hidden" id="department"/>
     </div>
 
-    <!-- Product + Quantity -->
+    <!-- Products table -->
     <div class="card">
       <div class="card-head">
-        <span class="card-head-dot"></span> Product &amp; Quantity
-        <span class="card-head-badge" id="stockRefreshBadge" style="display:none;cursor:pointer;" onclick="refreshSalesStock()">↺ Refresh stock</span>
+        <span class="card-head-dot"></span> Products &amp; Quantity
+        <span class="card-head-badge" id="stockRefreshBadge" style="display:none;cursor:pointer;" onclick="refreshStockOutStock()">↺ Refresh stock</span>
       </div>
-      <div class="g-product">
-        <div class="field">
-          <label>Segment <span class="req">*</span></label>
-          <select id="segment" disabled onchange="onSegmentChange()">
-            <option value="">— Select Segment —</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Product <span class="req">*</span></label>
-          <div class="combo-wrap combo-disabled" id="productWrap">
-            <input type="text" id="product" placeholder="Select or type..."
-              autocomplete="off" disabled
-              oninput="onProductInput()"
-              onfocus="onProductFocus()"
-              onblur="onProductBlur()"
-              onkeydown="onProductKey(event)"/>
-            <span class="combo-arrow">&#9660;</span>
-            <div class="combo-dropdown" id="productDropdown"></div>
-          </div>
-        </div>
-        <div class="field">
-          <label>Quantity <span class="req">*</span></label>
-          <input type="number" id="quantity" placeholder="0" min="0"/>
-          <span id="stockHint" style="display:none;font-size:11px;color:var(--muted);"></span>
-        </div>
-      </div>
-      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
-        <button type="button" class="btn-clear" id="cancelAddBtn" style="display:none;" onclick="cancelStagedEdit()">Cancel</button>
-        <button type="button" class="btn-submit" id="addBtn" onclick="addOrUpdateStagedEntry()">
-          <span id="addBtnLabel">＋ Add</span>
-        </button>
-      </div>
-    </div>
 
-    <!-- Products added so far in this batch — review, edit or remove before submitting -->
-    <div class="card" id="myEntriesCard">
-      <div class="card-head"><span class="card-head-dot"></span> Your Entries</div>
-      <div id="myEntriesBody">
-        <div class="entries-empty">No products added yet — fill in Segment, Product &amp; Quantity above and click Add</div>
+      <div class="filter-row">
+        <input type="text" id="searchBox" placeholder="🔍 Search product…" oninput="renderProductTable()"/>
+        <select id="segmentFilter" onchange="renderProductTable()">
+          <option value="">All Segments</option>
+        </select>
+      </div>
+
+      <div class="ptable-wrap">
+        <div class="ptable-scroll">
+          <table class="ptable">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th class="col-avail" id="availHeader" style="display:none;">Avail</th>
+                <th class="col-qty">Quantity</th>
+              </tr>
+            </thead>
+            <tbody id="ptableBody">
+              <tr><td colspan="3"><div class="ptable-empty">Select your name to load products</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="summary-bar">
+        <span class="summary-count" id="summaryCount">0 products selected</span>
+        <span class="summary-total">Total Quantity: <span id="summaryTotal">0</span></span>
       </div>
     </div>
 
@@ -549,6 +479,13 @@
     catch (e) { /* storage full/unavailable — safe to ignore, just skips caching */ }
   }
 
+  function escapeHtmlLocal(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   function populateDropdowns() {
     const nameSel = document.getElementById('name');
     const curName = nameSel.value;
@@ -560,16 +497,15 @@
     });
     if (curName && allUsers.some(u => u.name === curName)) nameSel.value = curName;
 
-    const curSeg = document.getElementById('segment').value;
+    const curSeg = document.getElementById('segmentFilter').value;
     const segs   = [...new Set(allProducts.map(p => p.segment))].sort();
-    const segSel = document.getElementById('segment');
-    segSel.innerHTML = '<option value="">— Select Segment —</option>';
+    const segSel = document.getElementById('segmentFilter');
+    segSel.innerHTML = '<option value="">All Segments</option>';
     segs.forEach(s => {
       const o = document.createElement('option');
       o.value = o.textContent = s;
       segSel.appendChild(o);
     });
-    segSel.disabled = false;
     if (curSeg && segs.includes(curSeg)) segSel.value = curSeg;
   }
 
@@ -582,8 +518,9 @@
       allUsers    = uJson.users;
       allProducts = pJson.products;
       writeCache('ppf_users_v1', allUsers);
-      writeCache('ppf_products_v1', allProducts);
+      writeCache('ppf_products_v2', allProducts);
       populateDropdowns();
+      renderProductTable();
     } catch (e) { /* silent — the visible/cached data just stays as-is */ }
   }
 
@@ -595,7 +532,7 @@
     eb.style.display = 'none';
 
     const cachedUsers    = readCache('ppf_users_v1');
-    const cachedProducts = readCache('ppf_products_v1');
+    const cachedProducts = readCache('ppf_products_v2');
 
     if (cachedUsers && cachedProducts) {
       allUsers    = cachedUsers;
@@ -625,7 +562,7 @@
       allUsers    = uJson.users;
       allProducts = pJson.products;
       writeCache('ppf_users_v1', allUsers);
-      writeCache('ppf_products_v1', allProducts);
+      writeCache('ppf_products_v2', allProducts);
       populateDropdowns();
 
       lb.style.display = 'none';
@@ -636,55 +573,61 @@
     }
   }
 
-  // ── Sales-entry stock restriction ──────────────────────
+  // ── Stock Out-entry stock restriction ──────────────────────
   // Each person's Entry Type (from the User sheet's Department column)
-  // decides which tab their submissions save to: Opening Stock, Sales,
-  // Stock In or Stock Out. When it's "Sales", the Product list is narrowed
-  // to only products with stock left (per the "Current Stock" sheet — a
-  // live, sheet-formula-maintained running balance, not scoped to any
-  // date), and Quantity defaults to / is capped at whatever remains,
-  // minus anything already staged for that product in this batch.
-  let currentEntryType   = '';
-  let salesStockMap      = {}; // "segment||product" → current Quantity from Current Stock sheet
-  let stockLoaded        = false;
+  // decides which tab their submissions save to: Opening Stock, Stock Out
+  // or Stock In. When it's "Stock Out", the product list is narrowed to
+  // only products with stock left (per the "Current Stock" sheet — a
+  // live, sheet-formula-maintained running balance), and each row's
+  // Quantity input is capped at whatever remains.
+  let currentEntryType = '';
+  let stockOutMap    = {}; // "segment||product" → current Quantity from Current Stock sheet
+  let stockLoaded      = false;
 
-  function isSalesEntry() {
-    return currentEntryType.trim().toLowerCase() === 'sales';
+  // Tolerant of variants people actually put in the User sheet's
+  // Department column (e.g. "Stock Out Entry", "Opening Stock Entry",
+  // "Stock-In") — mirrors resolveEntryTab()'s keyword fallback in Code.gs.
+  // "sales" is kept as a legacy alias in case any older rows still say it.
+  function isStockOutEntry() {
+    const norm = currentEntryType.trim().toLowerCase();
+    return norm.indexOf('stock out') !== -1 || norm.indexOf('stockout') !== -1 || norm.indexOf('sales') !== -1;
+  }
+
+  function isKnownEntryType(val) {
+    const norm = (val || '').trim().toLowerCase();
+    if (!norm) return true;
+    return norm.indexOf('stock out') !== -1 ||
+           norm.indexOf('stockout') !== -1 ||
+           norm.indexOf('sales') !== -1 ||
+           norm.indexOf('opening') !== -1 ||
+           norm.indexOf('stock in') !== -1 ||
+           norm.indexOf('stockin') !== -1;
   }
 
   function stockKey(segment, product) {
     return `${segment}||${product}`;
   }
 
-  function stagedQtyFor(segment, product, excludeIdx) {
-    return stagedEntries.reduce((sum, e, idx) => {
-      if (idx === excludeIdx) return sum;
-      if (e.segment === segment && e.product === product) return sum + (Number(e.quantity) || 0);
-      return sum;
-    }, 0);
-  }
-
-  function availableStockFor(segment, product, excludeIdx) {
+  function availableStockFor(segment, product) {
     const key = stockKey(segment, product);
-    const raw = salesStockMap.hasOwnProperty(key) ? salesStockMap[key] : 0;
-    return Math.max(0, raw - stagedQtyFor(segment, product, excludeIdx));
+    return stockOutMap.hasOwnProperty(key) ? Math.max(0, stockOutMap[key]) : 0;
   }
 
-  async function refreshSalesStock() {
-    if (!isSalesEntry()) return;
+  async function refreshStockOutStock() {
+    if (!isStockOutEntry()) return;
     try {
       const json = await safeFetch(`${GAS_URL}?action=getCurrentStock`, 2);
-      salesStockMap = {};
+      stockOutMap = {};
       (json.rows || []).forEach(r => {
-        salesStockMap[stockKey(r.segment, r.product)] = Number(r.quantity) || 0;
+        stockOutMap[stockKey(r.segment, r.product)] = Number(r.quantity) || 0;
       });
       stockLoaded = true;
     } catch (e) {
-      salesStockMap = {};
+      stockOutMap = {};
       stockLoaded = false;
       toast('Could not load current stock — ' + e.message, 'fail');
     }
-    onSegmentChange(true);
+    renderProductTable();
   }
 
   // ── Name → autofill Email + Entry Type (hidden) ───────
@@ -696,6 +639,9 @@
     currentEntryType = user ? (user.dept || '') : '';
 
     const pill = document.getElementById('entryTypePill');
+    const warnBanner = document.getElementById('warnBanner');
+    const warnMsg    = document.getElementById('warnMsg');
+
     if (currentEntryType) {
       pill.textContent  = currentEntryType.toUpperCase();
       pill.style.display = 'inline-block';
@@ -703,352 +649,130 @@
       pill.style.display = 'none';
     }
 
-    const badge = document.getElementById('stockRefreshBadge');
-    if (isSalesEntry()) {
-      badge.style.display = 'inline-block';
-      refreshSalesStock();
+    if (currentEntryType && !isKnownEntryType(currentEntryType)) {
+      warnMsg.textContent = `⚠ "${currentEntryType}" is not a recognized Entry Type (expected Opening Stock, Stock Out or Stock In). Ask your admin to fix this in the User sheet — submissions may not save correctly.`;
+      warnBanner.style.display = 'flex';
     } else {
+      warnBanner.style.display = 'none';
+    }
+
+    const badge = document.getElementById('availHeader');
+    const refreshBadge = document.getElementById('stockRefreshBadge');
+    qtyMap = {};
+    if (isStockOutEntry()) {
+      refreshBadge.style.display = 'inline-block';
+      badge.style.display = 'table-cell';
+      refreshStockOutStock();
+    } else {
+      refreshBadge.style.display = 'none';
       badge.style.display = 'none';
-      salesStockMap = {};
+      stockOutMap = {};
       stockLoaded = false;
-      onSegmentChange(true);
+      renderProductTable();
     }
   }
 
-  function escapeHtmlLocal(str) {
-    return String(str == null ? '' : str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
+  // ── Product table (all products at once) ────────────────
+  let qtyMap = {}; // "segment||product" → quantity entered (persists across filtering/search)
 
-  // ── Segment → enable/populate Product combobox ──────
-  // preserveProduct=true keeps whatever Segment/Product is already picked
-  // (used when re-running this just because sales stock refreshed) instead
-  // of clearing the fields.
-  function onSegmentChange(preserveProduct) {
-    const seg  = document.getElementById('segment').value;
-    const inp  = document.getElementById('product');
-    const wrap = document.getElementById('productWrap');
-    const keepVal = preserveProduct ? inp.value : '';
-    if (!preserveProduct) { inp.value = ''; inp.classList.remove('has-value'); }
+  function renderProductTable() {
+    const body       = document.getElementById('ptableBody');
+    const search     = document.getElementById('searchBox').value.trim().toLowerCase();
+    const segFilter  = document.getElementById('segmentFilter').value;
+    const nameChosen = !!document.getElementById('name').value;
 
-    let list = seg ? allProducts.filter(p => p.segment === seg) : [];
-    if (isSalesEntry()) {
+    if (!nameChosen) {
+      body.innerHTML = '<tr><td colspan="3"><div class="ptable-empty">Select your name to load products</div></td></tr>';
+      updateSummary();
+      return;
+    }
+
+    let list = allProducts.slice();
+    if (isStockOutEntry()) {
       list = list.filter(p => availableStockFor(p.segment, p.product) > 0);
     }
-    currentProducts = list;
+    if (segFilter) list = list.filter(p => p.segment === segFilter);
+    if (search) list = list.filter(p => p.product.toLowerCase().includes(search) || p.segment.toLowerCase().includes(search));
+    list.sort((a, b) => a.segment.localeCompare(b.segment) || a.product.localeCompare(b.product));
 
-    if (!seg) {
-      inp.disabled = true;
-      wrap.classList.add('combo-disabled');
-    } else {
-      inp.disabled = false;
-      wrap.classList.remove('combo-disabled');
-      inp.placeholder = isSalesEntry() ? 'Select a product in stock…' : 'Type or pick a product…';
-    }
-
-    if (preserveProduct && keepVal) {
-      inp.value = keepVal;
-      applyQuantityCap(seg, keepVal, null, true);
-    }
-
-    closeDropdown();
-  }
-
-  // ── Combobox logic ─────────────────────────────────────
-  let currentProducts = [];
-  let activeIdx = -1;
-
-  function renderDropdown(filter) {
-    const dd = document.getElementById('productDropdown');
-    const list = filter
-      ? currentProducts.filter(p => p.product.toLowerCase().includes(filter.toLowerCase()))
-      : currentProducts;
     if (!list.length) {
-      dd.innerHTML = isSalesEntry()
-        ? '<div class="combo-empty">No stock available for this segment</div>'
-        : '<div class="combo-empty">No products found</div>';
-    } else {
-      dd.innerHTML = list.map((p, i) => {
-        const name = filter
-          ? p.product.replace(new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'),
-              '<strong>$1</strong>')
-          : p.product;
-        const stockNote = isSalesEntry()
-          ? ` <span style="color:var(--muted);font-size:11.5px;">— Avail: ${availableStockFor(p.segment, p.product)}</span>`
-          : '';
-        return `<div class="combo-item" data-val="${p.product}" data-idx="${i}"
-          onmousedown="pickProduct('${p.product.replace(/'/g,"\'")}')">
-          ${name}${stockNote}</div>`;
-      }).join('');
-    }
-    dd.classList.add('open');
-    activeIdx = -1;
-  }
-
-  function pickProduct(val) {
-    const inp = document.getElementById('product');
-    inp.value = val;
-    inp.classList.add('has-value');
-    closeDropdown();
-    applyQuantityCap(document.getElementById('segment').value, val, null);
-    document.getElementById('quantity').focus();
-  }
-
-  // Sets Quantity's max for a Sales entry (capped at remaining stock) and
-  // clears any cap otherwise. By default also resets Quantity's value to
-  // the available stock; pass keepValue=true to leave an existing value
-  // alone (used when re-opening a staged entry for editing).
-  function applyQuantityCap(segment, product, excludeIdx, keepValue) {
-    const qtyInp = document.getElementById('quantity');
-    const hint   = document.getElementById('stockHint');
-    if (isSalesEntry() && segment && product) {
-      const avail = availableStockFor(segment, product, excludeIdx);
-      qtyInp.max = avail;
-      if (!keepValue) qtyInp.value = avail;
-      hint.textContent  = `Max available: ${avail}`;
-      hint.style.display = 'block';
-    } else {
-      qtyInp.removeAttribute('max');
-      hint.style.display = 'none';
-      hint.textContent = '';
-    }
-  }
-
-  function closeDropdown() {
-    document.getElementById('productDropdown').classList.remove('open');
-    activeIdx = -1;
-  }
-
-  function onProductInput() {
-    const inp = document.getElementById('product');
-    inp.classList.toggle('has-value', inp.value.trim().length > 0);
-    renderDropdown(inp.value.trim());
-  }
-
-  function onProductFocus() {
-    if (!document.getElementById('product').disabled) {
-      renderDropdown(document.getElementById('product').value.trim());
-    }
-  }
-
-  function onProductBlur() {
-    setTimeout(closeDropdown, 150);
-  }
-
-  function onProductKey(e) {
-    const dd    = document.getElementById('productDropdown');
-    const items = dd.querySelectorAll('.combo-item');
-    if (!items.length) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      activeIdx = Math.min(activeIdx + 1, items.length - 1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      activeIdx = Math.max(activeIdx - 1, 0);
-    } else if (e.key === 'Enter' && activeIdx >= 0) {
-      e.preventDefault();
-      pickProduct(items[activeIdx].dataset.val);
-      return;
-    } else if (e.key === 'Escape') {
-      closeDropdown(); return;
-    } else { return; }
-    items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
-    if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
-  }
-
-  // ── Staged entries ──────────────────────────────────────
-  let stagedEntries      = [];   // [{date, name, email, department, segment, product, quantity}]
-  let editingStagedIndex = null;
-
-  function addOrUpdateStagedEntry() {
-    const fields = [
-      { id: 'date',     label: 'Date' },
-      { id: 'name',     label: 'Name' },
-      { id: 'segment',  label: 'Segment' },
-      { id: 'product',  label: 'Product' },
-      { id: 'quantity', label: 'Quantity' }
-    ];
-    for (const f of fields) {
-      if (!document.getElementById(f.id).value) {
-        document.getElementById(f.id).focus();
-        toast('Required: ' + f.label, 'fail');
-        return;
-      }
-    }
-
-    if (isSalesEntry()) {
-      const seg   = document.getElementById('segment').value;
-      const prod  = document.getElementById('product').value;
-      const qty   = Number(document.getElementById('quantity').value) || 0;
-      const avail = availableStockFor(seg, prod, editingStagedIndex);
-      if (qty > avail) {
-        document.getElementById('quantity').focus();
-        toast(`Only ${avail} in stock for ${prod} — reduce the quantity`, 'fail');
-        return;
-      }
-    }
-
-    const entry = {
-      date:       document.getElementById('date').value,
-      name:       document.getElementById('name').value,
-      email:      document.getElementById('email').value,
-      department: document.getElementById('department').value, // this IS the Entry Type
-      segment:    document.getElementById('segment').value,
-      product:    document.getElementById('product').value,
-      quantity:   Number(document.getElementById('quantity').value) || 0
-    };
-
-    if (editingStagedIndex !== null) {
-      stagedEntries[editingStagedIndex] = entry;
-      toast('Item updated in your list ✓', 'success');
-      exitStagedEditMode();
-    } else {
-      stagedEntries.push(entry);
-      toast('Added to your list ✓', 'success');
-    }
-
-    document.getElementById('segment').value = '';
-    onSegmentChange();
-    document.getElementById('quantity').value = '';
-    applyQuantityCap(null, null, null);
-    document.getElementById('segment').focus();
-
-    renderStagedEntries();
-  }
-
-  function exitStagedEditMode() {
-    editingStagedIndex = null;
-    document.getElementById('editBanner').classList.remove('visible');
-    document.getElementById('addBtnLabel').textContent = '＋ Add';
-    document.getElementById('cancelAddBtn').style.display = 'none';
-  }
-
-  function cancelStagedEdit() {
-    exitStagedEditMode();
-    document.getElementById('segment').value = '';
-    onSegmentChange();
-    document.getElementById('quantity').value = '';
-    applyQuantityCap(null, null, null);
-    renderStagedEntries();
-  }
-
-  function editStagedEntry(idx) {
-    const entry = stagedEntries[idx];
-    if (!entry) return;
-    editingStagedIndex = idx;
-
-    document.getElementById('date').value       = entry.date;
-    document.getElementById('name').value       = entry.name;
-    document.getElementById('email').value      = entry.email;
-    document.getElementById('department').value = entry.department;
-
-    const segSel = document.getElementById('segment');
-    segSel.value = entry.segment;
-    currentProducts = entry.segment ? allProducts.filter(p => p.segment === entry.segment) : [];
-    if (isSalesEntry()) {
-      currentProducts = currentProducts.filter(p =>
-        p.product === entry.product || availableStockFor(p.segment, p.product, idx) > 0
-      );
-    }
-    const prodInp  = document.getElementById('product');
-    const prodWrap = document.getElementById('productWrap');
-    if (entry.segment) {
-      prodInp.disabled = false;
-      prodWrap.classList.remove('combo-disabled');
-    }
-    prodInp.value = entry.product;
-    prodInp.classList.add('has-value');
-    document.getElementById('quantity').value = entry.quantity;
-    applyQuantityCap(entry.segment, entry.product, idx, true);
-
-    document.getElementById('editBannerIdx').textContent = idx + 1;
-    document.getElementById('editBanner').classList.add('visible');
-    document.getElementById('addBtnLabel').textContent = 'Update Item';
-    document.getElementById('cancelAddBtn').style.display = 'inline-block';
-
-    renderStagedEntries();
-    document.getElementById('form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function removeStagedEntry(idx) {
-    stagedEntries.splice(idx, 1);
-    if (editingStagedIndex === idx) {
-      cancelStagedEdit();
+      body.innerHTML = `<tr><td colspan="3"><div class="ptable-empty">${
+        isStockOutEntry() && !stockLoaded ? 'Loading current stock…' :
+        isStockOutEntry() ? 'No products with stock available' : 'No products found'
+      }</div></td></tr>`;
+      updateSummary();
       return;
     }
-    if (editingStagedIndex !== null && editingStagedIndex > idx) {
-      editingStagedIndex -= 1;
-    }
-    renderStagedEntries();
-  }
 
-  function renderStagedEntries() {
-    const body = document.getElementById('myEntriesBody');
-    const submitBtn = document.getElementById('submitBtn');
-
-    if (!stagedEntries.length) {
-      body.innerHTML = '<div class="entries-empty">No products added yet — fill in Segment, Product &amp; Quantity above and click Add</div>';
-      submitBtn.disabled = true;
-      return;
-    }
-    submitBtn.disabled = false;
-
-    const dupKeyLocal = e => (e.product || '').trim().toLowerCase() + '|' + e.quantity;
-    const dupCount = {};
-    stagedEntries.forEach(e => { const k = dupKeyLocal(e); dupCount[k] = (dupCount[k] || 0) + 1; });
-    const hasDup = Object.values(dupCount).some(c => c > 1);
-
-    const total = stagedEntries.reduce((sum, e) => sum + (Number(e.quantity) || 0), 0);
-    const listHtml = stagedEntries.map((e, idx) => {
-      const isDup = dupCount[dupKeyLocal(e)] > 1;
-      const isEditing = editingStagedIndex === idx;
-      return `
-      <div class="entry-item${isDup ? ' entry-dup' : ''}${isEditing ? ' selected' : ''}" style="cursor:default;">
-        <div class="entry-meta">
-          <strong>${escapeHtmlLocal(e.product)}</strong>
-          <span>${escapeHtmlLocal(e.segment)}</span>
-        </div>
-        <span class="entry-dept">${escapeHtmlLocal(e.department)}</span>
-        <span class="entry-qty">${escapeHtmlLocal(e.quantity)}</span>
-        <div class="entry-actions">
-          <button type="button" class="entry-action-btn entry-edit-btn" title="Edit this item" onclick="editStagedEntry(${idx})">✏️ Edit</button>
-          <button type="button" class="entry-action-btn entry-delete-btn" title="Remove this item" onclick="removeStagedEntry(${idx})">🗑️ Remove</button>
-        </div>
-      </div>`;
+    body.innerHTML = list.map(p => {
+      const key   = stockKey(p.segment, p.product);
+      const val   = qtyMap.hasOwnProperty(key) ? qtyMap[key] : '';
+      const avail = isStockOutEntry() ? availableStockFor(p.segment, p.product) : null;
+      const rowHasQty = Number(val) > 0;
+      const availCell = isStockOutEntry()
+        ? `<td class="p-avail${avail === 0 ? ' zero' : ''}">${avail}</td>`
+        : '';
+      const maxAttr = isStockOutEntry() ? `max="${avail}"` : '';
+      return `<tr class="${rowHasQty ? 'has-qty' : ''}" data-key="${escapeHtmlLocal(key)}">
+        <td>
+          <div class="p-name">${escapeHtmlLocal(p.product)}</div>
+          <div class="p-segment">${escapeHtmlLocal(p.segment)}</div>
+        </td>
+        ${availCell}
+        <td>
+          <input type="number" class="qty-input" min="0" ${maxAttr} placeholder="0"
+            value="${val}"
+            oninput="onQtyInput('${key.replace(/'/g,"\\'")}', this)"
+          />
+        </td>
+      </tr>`;
     }).join('');
 
-    const dupWarning = hasDup
-      ? `<div style="background:#fef2f2;border:1px solid #fecaca;color:var(--error);border-radius:9px;padding:9px 13px;font-size:12.5px;margin-bottom:10px;">⚠ Possible duplicate items below (same product &amp; quantity) — highlighted in red. Edit or remove the extra one before submitting.</div>`
-      : '';
+    updateSummary();
+  }
 
-    body.innerHTML = `${dupWarning}<div class="entries-list">${listHtml}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;color:var(--muted);">
-        <span>${stagedEntries.length} item${stagedEntries.length === 1 ? '' : 's'} to submit</span>
-        <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--text);">Total Qty: ${total}</span>
-      </div>`;
+  function onQtyInput(key, inputEl) {
+    let raw = inputEl.value;
+    let num = raw === '' ? '' : Math.max(0, Number(raw) || 0);
+
+    if (isStockOutEntry()) {
+      const [segment, product] = key.split('||');
+      const avail = availableStockFor(segment, product);
+      if (num !== '' && num > avail) {
+        num = avail;
+        inputEl.value = num;
+        toast(`Only ${avail} in stock — capped`, 'fail');
+      }
+    }
+
+    if (num === '' || num === 0) {
+      delete qtyMap[key];
+      inputEl.closest('tr').classList.remove('has-qty');
+    } else {
+      qtyMap[key] = num;
+      inputEl.closest('tr').classList.add('has-qty');
+    }
+    updateSummary();
+  }
+
+  function updateSummary() {
+    const keys  = Object.keys(qtyMap);
+    const total = keys.reduce((sum, k) => sum + (Number(qtyMap[k]) || 0), 0);
+    document.getElementById('summaryCount').textContent = `${keys.length} product${keys.length === 1 ? '' : 's'} selected`;
+    document.getElementById('summaryTotal').textContent = total;
+    document.getElementById('submitBtn').disabled = keys.length === 0 || !document.getElementById('name').value;
   }
 
   // Posts ALL entries to the backend in one batch request. The server
   // groups them by Entry Type (department) and appends each group to the
-  // matching tab (Opening Stock / Sales / Stock In / Stock Out).
+  // matching tab (Opening Stock / Stock Out / Stock In).
   async function postBatch(entries, retries = 3) {
-    const payload = entries.map(e => ({
-      date:      e.date,
-      name:      e.name,
-      email:     e.email,
-      entryType: e.department,
-      segment:   e.segment,
-      product:   e.product,
-      quantity:  e.quantity
-    }));
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
         const res = await fetch(GAS_URL, {
           method:  'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body:    JSON.stringify({ action: 'batch', entries: payload })
+          body:    JSON.stringify({ action: 'batch', entries })
         });
         const text = await res.text();
         const json = parseGasResponse(text);
@@ -1064,74 +788,84 @@
   document.getElementById('form').addEventListener('submit', async function (e) {
     e.preventDefault();
 
-    if (editingStagedIndex !== null) {
-      toast('Finish editing that item (Update Item or Cancel) first', 'fail');
+    const date = document.getElementById('date').value;
+    const name = document.getElementById('name').value;
+    const email = document.getElementById('email').value;
+    const entryType = document.getElementById('department').value;
+
+    if (!date) { toast('Required: Date', 'fail'); return; }
+    if (!name) { document.getElementById('name').focus(); toast('Required: Name', 'fail'); return; }
+
+    const keys = Object.keys(qtyMap);
+    if (!keys.length) {
+      toast('Enter a quantity for at least one product', 'fail');
       return;
     }
-    if (!stagedEntries.length) {
-      toast('Add at least one product before submitting', 'fail');
-      return;
+
+    // Re-validate Stock Out caps at submit time in case stock changed
+    if (isStockOutEntry()) {
+      for (const key of keys) {
+        const [segment, product] = key.split('||');
+        const avail = availableStockFor(segment, product);
+        if ((Number(qtyMap[key]) || 0) > avail) {
+          toast(`Stock changed — ${product} now has only ${avail} available. Please review.`, 'fail');
+          renderProductTable();
+          return;
+        }
+      }
     }
+
+    const entries = keys.map(key => {
+      const [segment, product] = key.split('||');
+      return {
+        date, name, email, entryType,
+        segment, product,
+        quantity: Number(qtyMap[key]) || 0
+      };
+    });
 
     const btn = document.getElementById('submitBtn');
     const lbl = document.getElementById('submitLabel');
     btn.disabled = true;
-    document.getElementById('cancelAddBtn').style.display = 'none';
-    document.getElementById('addBtn').disabled = true;
-
-    const totalToSubmit = stagedEntries.length;
-    lbl.textContent = `Submitting ${totalToSubmit} item${totalToSubmit === 1 ? '' : 's'}…`;
+    lbl.textContent = `Submitting ${entries.length} item${entries.length === 1 ? '' : 's'}…`;
 
     try {
-      const result = await postBatch([...stagedEntries]);
-      const count = result.inserted != null ? result.inserted : totalToSubmit;
-      stagedEntries = [];
-      renderStagedEntries();
+      const result = await postBatch(entries);
+      const count = result.inserted != null ? result.inserted : entries.length;
+      qtyMap = {};
       let msg = `${count} entr${count === 1 ? 'y' : 'ies'} submitted ✓`;
       if (result.skippedDuplicates) msg += ` (${result.skippedDuplicates} duplicate skipped)`;
       toast(msg, 'success');
-      document.getElementById('segment').value = '';
-      onSegmentChange();
-      document.getElementById('quantity').value = '';
-      applyQuantityCap(null, null, null);
-      if (isSalesEntry()) refreshSalesStock(); // stock just moved — refresh it
+      if (isStockOutEntry()) await refreshStockOutStock(); // stock just moved — refresh it
+      else renderProductTable();
     } catch (err) {
-      renderStagedEntries();
       toast(`Submit failed — ${err.message}`, 'fail');
     }
 
-    btn.disabled = stagedEntries.length === 0;
-    document.getElementById('addBtn').disabled = false;
     lbl.textContent = 'Submit Entry';
+    updateSummary();
   });
 
   // ── Reset All ──────────────────────────────────────────
   function resetForm() {
-    if (stagedEntries.length && !confirm(`This will remove ${stagedEntries.length} unsubmitted item(s) from your list. Continue?`)) {
+    if (Object.keys(qtyMap).length && !confirm('This will clear all entered quantities. Continue?')) {
       return;
     }
-    stagedEntries = [];
-    editingStagedIndex = null;
+    qtyMap = {};
     document.getElementById('date').value       = new Date().toISOString().split('T')[0];
     document.getElementById('name').value       = '';
     document.getElementById('email').value      = '';
     document.getElementById('department').value = '';
-    document.getElementById('segment').value    = '';
-    const pi = document.getElementById('product');
-    pi.value = '';
-    pi.disabled = true;
-    pi.classList.remove('has-value');
-    document.getElementById('productWrap').classList.add('combo-disabled');
-    closeDropdown();
-    document.getElementById('quantity').value   = '';
+    document.getElementById('searchBox').value  = '';
+    document.getElementById('segmentFilter').value = '';
     currentEntryType = '';
-    salesStockMap    = {};
+    stockOutMap    = {};
     stockLoaded      = false;
     document.getElementById('entryTypePill').style.display = 'none';
     document.getElementById('stockRefreshBadge').style.display = 'none';
-    applyQuantityCap(null, null, null);
-    exitStagedEditMode();
-    renderStagedEntries();
+    document.getElementById('availHeader').style.display = 'none';
+    document.getElementById('warnBanner').style.display = 'none';
+    renderProductTable();
   }
 
   // ── Toast ──────────────────────────────────────────────
