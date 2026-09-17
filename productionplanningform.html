@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Production Planning — My Dream Foods</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg:        #f5f7fa;
@@ -146,6 +147,16 @@
   }
   select:disabled { opacity: 0.4; cursor: not-allowed; }
   input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.5; cursor: pointer; }
+  input[type="file"] {
+    padding: 9px 10px;
+    cursor: pointer;
+  }
+  input[type="file"]::file-selector-button {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 7px; padding: 7px 14px;
+    font-family: 'Outfit', sans-serif; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; margin-right: 10px;
+  }
 
   /* ── Banners ── */
   .banner {
@@ -360,6 +371,20 @@
       <input type="hidden" id="department"/>
     </div>
 
+    <!-- Upload Current Stock export → prefill Opening Stock (Opening Stock users only) -->
+    <div class="card" id="uploadCard" style="display:none;">
+      <div class="card-head"><span class="card-head-dot"></span> Upload Current Stock (prefill Opening Stock)</div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin-bottom:12px;">
+        Upload the <strong>Excel</strong> file downloaded from the dashboard's Current Stock table — its
+        <strong>Current Stock</strong> column (yesterday's closing balance) is filled in below as
+        <strong>Opening Stock</strong> for the date above. Review the numbers before submitting — nothing
+        is saved until you press Submit. (PDF isn't accepted here since a PDF table can't be parsed reliably;
+        use the Excel export instead.)
+      </p>
+      <input type="file" id="openingStockUpload" accept=".xlsx,.xls" onchange="handleOpeningStockUpload(event)"/>
+      <div id="uploadStatus" style="font-size:12px;color:var(--muted);margin-top:9px;"></div>
+    </div>
+
     <!-- Products table -->
     <div class="card">
       <div class="card-head">
@@ -418,23 +443,40 @@
   // Default date
   document.getElementById('date').value = new Date().toISOString().split('T')[0];
 
+  // Apps Script serves an HTML page instead of JSON in a few different
+  // situations, and they need different fixes, so sniff which one this is
+  // rather than always blaming the deployment's access setting (usually
+  // already correct):
+  //  - a Google account chooser / login page → genuinely a sign-in block
+  //  - Apps Script's own error page (an unhandled exception, or a stale
+  //    deployment — editing Code.gs does NOT go live until you deploy a
+  //    NEW VERSION) → the far more common cause in practice
+  //  - anything else → shown as-is so it can be diagnosed
   function parseGasResponse(responseText) {
     const trimmed = (responseText || '').trim();
     if (/^<!DOCTYPE|^<html/i.test(trimmed)) {
-      throw new Error('Blocked by Google sign-in — ask your admin to set the Apps Script deployment access to "Anyone"');
+      if (/accounts\.google\.com|ServiceLogin|signin\/oauth/i.test(trimmed)) {
+        throw new Error('Blocked by Google sign-in — set the Apps Script deployment\'s "Who has access" to "Anyone" and redeploy.');
+      }
+      if (/we're sorry|a server error occurred|script function not found|exceeded maximum execution time/i.test(trimmed)) {
+        throw new Error('Apps Script error — the deployed script hit an error. Make sure it was redeployed as a New version after the last edit.');
+      }
+      throw new Error('Google returned a page instead of data — most likely Code.gs wasn\'t redeployed as a New version after the last edit.');
     }
     try {
       return JSON.parse(trimmed);
     } catch (e) {
-      throw new Error('Unexpected response: ' + trimmed.slice(0, 80));
+      throw new Error('Unexpected response: ' + trimmed.slice(0, 120));
     }
   }
 
+  // Timeout is generous (2 min) — a huge spreadsheet can genuinely take a
+  // while for Apps Script to read+serialize; that's slow, not broken.
   function xhrGet(url, onSlow) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
-      xhr.timeout = 30000;
+      xhr.timeout = 120000;
       const slowTimer = setTimeout(() => { if (onSlow) onSlow(); }, 8000);
       xhr.onload  = () => {
         clearTimeout(slowTimer);
@@ -447,7 +489,7 @@
     });
   }
 
-  async function safeFetch(url, retries = 2, onSlow) {
+  async function safeFetch(url, retries = 3, onSlow) {
     for (let i = 0; i < retries; i++) {
       try {
         const json = await xhrGet(url, onSlow);
@@ -593,6 +635,10 @@
     return norm.indexOf('stock out') !== -1 || norm.indexOf('stockout') !== -1 || norm.indexOf('sales') !== -1;
   }
 
+  function isOpeningStockEntry() {
+    return currentEntryType.trim().toLowerCase().indexOf('opening') !== -1;
+  }
+
   function isKnownEntryType(val) {
     const norm = (val || '').trim().toLowerCase();
     if (!norm) return true;
@@ -616,7 +662,7 @@
   async function refreshStockOutStock() {
     if (!isStockOutEntry()) return;
     try {
-      const json = await safeFetch(`${GAS_URL}?action=getCurrentStock`, 2);
+      const json = await safeFetch(`${GAS_URL}?action=getCurrentStock`, 3);
       stockOutMap = {};
       (json.rows || []).forEach(r => {
         stockOutMap[stockKey(r.segment, r.product)] = Number(r.quantity) || 0;
@@ -670,6 +716,120 @@
       stockLoaded = false;
       renderProductTable();
     }
+
+    const uploadCard = document.getElementById('uploadCard');
+    if (isOpeningStockEntry()) {
+      uploadCard.style.display = '';
+    } else {
+      uploadCard.style.display = 'none';
+      document.getElementById('openingStockUpload').value = '';
+      document.getElementById('uploadStatus').textContent = '';
+    }
+  }
+
+  // ── Upload Current Stock export → prefill Opening Stock ────────────────
+  // Lets someone doing Opening Stock entry skip re-typing every product by
+  // hand: they upload the Excel they already downloaded from the
+  // dashboard's Current Stock table, and its "Current Stock" column
+  // (yesterday's closing balance) becomes today's Opening Stock quantity
+  // for each matching product. Nothing is saved until they review the
+  // prefilled table and press Submit like any other entry.
+  function normKey(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
+
+  function handleOpeningStockUpload(event) {
+    const file = event.target.files && event.target.files[0];
+    const statusEl = document.getElementById('uploadStatus');
+    if (!file) return;
+
+    if (!isOpeningStockEntry()) {
+      statusEl.textContent = '⚠ Select an Opening Stock user first.';
+      event.target.value = '';
+      return;
+    }
+    if (!allProducts.length) {
+      statusEl.textContent = '⚠ Product list hasn\'t loaded yet — wait a moment and try again.';
+      event.target.value = '';
+      return;
+    }
+
+    statusEl.textContent = 'Reading file…';
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const sheetName = wb.SheetNames.indexOf('Current Stock') !== -1 ? 'Current Stock' : wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        applyOpeningStockUpload(rows);
+      } catch (err) {
+        statusEl.textContent = '⚠ Could not read file — ' + err.message;
+        toast('Could not read file', 'fail');
+      } finally {
+        event.target.value = ''; // allow re-uploading the same file name later
+      }
+    };
+    reader.onerror = function () {
+      statusEl.textContent = '⚠ Could not read file.';
+      event.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function applyOpeningStockUpload(rows) {
+    const statusEl = document.getElementById('uploadStatus');
+    if (!rows || !rows.length) {
+      statusEl.textContent = '⚠ No rows found in the uploaded file.';
+      toast('File looks empty', 'fail');
+      return;
+    }
+
+    // Tolerant of the exact export headers ("Segment", "Product",
+    // "Current Stock") as well as older/renamed variants, in case the
+    // file was edited or came from an older export.
+    const headerKeys = Object.keys(rows[0]);
+    const findHeader = (...cands) => headerKeys.find(h => cands.indexOf(normKey(h)) !== -1);
+    const segH  = findHeader('segment');
+    const prodH = findHeader('product');
+    const qtyH  = findHeader('current stock', 'current qty', 'quantity', 'closing stock');
+
+    if (!prodH || !qtyH) {
+      statusEl.textContent = '⚠ Could not find "Product" and "Current Stock" columns in this file — make sure it\'s the Current Stock export.';
+      toast('Unrecognized file format', 'fail');
+      return;
+    }
+
+    let matched = 0, unmatched = 0, skippedZero = 0;
+    const unmatchedNames = [];
+
+    rows.forEach(row => {
+      const prod = String(row[prodH] || '').trim();
+      if (!prod) return;
+      const seg = segH ? String(row[segH] || '').trim() : '';
+      const qty = Number(row[qtyH]) || 0;
+
+      // Match against the live Product list by name (and segment, when the
+      // file has one) rather than trusting the file's own spelling — the
+      // Product sheet is the source of truth for what's a valid product.
+      let match = allProducts.find(p =>
+        normKey(p.product) === normKey(prod) && (!seg || normKey(p.segment) === normKey(seg))
+      );
+      if (!match) match = allProducts.find(p => normKey(p.product) === normKey(prod));
+
+      if (!match) { unmatched++; unmatchedNames.push(prod); return; }
+      if (qty <= 0) { skippedZero++; return; }
+
+      qtyMap[stockKey(match.segment, match.product)] = qty;
+      matched++;
+    });
+
+    renderProductTable();
+
+    let msg = `Prefilled ${matched} product${matched === 1 ? '' : 's'} from file`;
+    if (unmatched) msg += `, ${unmatched} not matched`;
+    if (skippedZero) msg += `, ${skippedZero} were zero`;
+    statusEl.textContent = msg + '. Review below, then Submit.';
+    toast(matched ? `Prefilled ${matched} products ✓` : 'No matching products found', matched ? 'success' : 'fail');
+    if (unmatched) console.warn('Opening Stock upload — products not found in Product sheet:', unmatchedNames);
   }
 
   // ── Product table (all products at once) ────────────────
@@ -768,19 +928,30 @@
   // matching tab (Opening Stock / Stock Out / Stock In).
   async function postBatch(entries, retries = 3) {
     for (let attempt = 0; attempt < retries; attempt++) {
+      const controller = new AbortController();
+      // A plain fetch() never times out on its own — for a big batch or a
+      // slow sheet this could otherwise hang indefinitely. Give it a
+      // generous 2 minutes before giving up and letting the retry loop
+      // (or the user) try again, rather than spinning forever.
+      const killer = setTimeout(() => controller.abort(), 120000);
       try {
         const res = await fetch(GAS_URL, {
           method:  'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body:    JSON.stringify({ action: 'batch', entries })
+          body:    JSON.stringify({ action: 'batch', entries }),
+          signal:  controller.signal
         });
         const text = await res.text();
         const json = parseGasResponse(text);
         if (!json.success) throw new Error(json.error || 'Server error');
         return json;
       } catch (err) {
-        if (attempt === retries - 1) throw err;
+        if (attempt === retries - 1) {
+          throw err.name === 'AbortError' ? new Error('Server timed out — try again') : err;
+        }
         await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+      } finally {
+        clearTimeout(killer);
       }
     }
   }
@@ -865,6 +1036,9 @@
     document.getElementById('stockRefreshBadge').style.display = 'none';
     document.getElementById('availHeader').style.display = 'none';
     document.getElementById('warnBanner').style.display = 'none';
+    document.getElementById('uploadCard').style.display = 'none';
+    document.getElementById('openingStockUpload').value = '';
+    document.getElementById('uploadStatus').textContent = '';
     renderProductTable();
   }
 
