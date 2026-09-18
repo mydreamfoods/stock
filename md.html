@@ -933,7 +933,19 @@
   // Posts ALL entries to the backend in one batch request. The server
   // groups them by Entry Type (department) and appends each group to the
   // matching tab (Opening Stock / Stock Out / Stock In).
+  function makeSubmissionId() {
+    // A stable id for one Submit click, reused across every retry of that
+    // same click. The server uses it to recognize "this is the same
+    // submission trying again" and returns the original result instead of
+    // saving the rows a second time — this is what stops a slow request
+    // that actually succeeded on the server from turning into 2-4 rows
+    // when the client times out/retries or the user resubmits.
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'sub-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  }
+
   async function postBatch(entries, retries = 3, onSlow) {
+    const submissionId = makeSubmissionId();
     for (let attempt = 0; attempt < retries; attempt++) {
       const controller = new AbortController();
       // A plain fetch() never times out on its own — for a big batch or a
@@ -950,7 +962,7 @@
         const res = await fetch(GAS_URL, {
           method:  'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body:    JSON.stringify({ action: 'batch', entries }),
+          body:    JSON.stringify({ action: 'batch', entries, submissionId }),
           signal:  controller.signal
         });
         const text = await res.text();
