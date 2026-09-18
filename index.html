@@ -673,30 +673,43 @@ function showView(view, tab) {
   if (view === 'oldstock') renderOldStock();
 }
 
-// Google intercepts the request before it reaches doGet() (usually because
-// the deployment's "Who has access" requires a signed-in Google account the
-// visitor isn't logged into, or a Google error page) and serves an HTML
-// page instead of JSON. That page always starts with <!DOCTYPE or <html —
-// detect it and surface a message that actually points at the fix instead
-// of dumping raw markup.
+// Apps Script serves an HTML page instead of JSON in a few different
+// situations, and they need different fixes — so instead of a single
+// generic "blocked by sign-in" message (which is wrong most of the time
+// and sends people chasing the deployment's access setting when that's
+// usually already correct), sniff the page for what actually happened:
+//  - a Google account chooser / login page → genuinely a sign-in block
+//  - Apps Script's own "Exception"/"Script function not found" error page
+//    → a bug or a stale deployment (the most common cause in practice —
+//    editing Code.gs does NOT push live until you deploy a NEW VERSION)
+//  - anything else → shown as-is so it can be diagnosed
 function parseGasResponse(responseText) {
   const trimmed = (responseText || '').trim();
   if (/^<!DOCTYPE|^<html/i.test(trimmed)) {
-    throw new Error('Blocked by Google sign-in — ask your admin to set the Apps Script deployment access to "Anyone", and make sure it was redeployed after the last script change');
+    if (/accounts\.google\.com|ServiceLogin|signin\/oauth/i.test(trimmed)) {
+      throw new Error('Blocked by Google sign-in — set the Apps Script deployment\'s "Who has access" to "Anyone" and redeploy.');
+    }
+    if (/we're sorry|a server error occurred|script function not found|exceeded maximum execution time/i.test(trimmed)) {
+      throw new Error('Apps Script error — the deployed script hit an error. Open Extensions ▸ Apps Script ▸ Executions to see why, and make sure you redeployed (New version) after the last edit.');
+    }
+    throw new Error('Google returned a page instead of data — most likely Code.gs wasn\'t redeployed as a New version after the last edit. (Editing the script does not update the live URL by itself.)');
   }
   try {
     return JSON.parse(trimmed);
   } catch (e) {
-    throw new Error('Unexpected response: ' + trimmed.slice(0, 80));
+    throw new Error('Unexpected response: ' + trimmed.slice(0, 120));
   }
 }
 
 // ── XHR helper ────────────────────────────────────────
+// Timeout is generous (2 min) because a huge spreadsheet can genuinely take
+// a while for Apps Script to read+serialize — that's a slow response, not
+// a broken one, and should get more patience rather than an error.
 function xhrGet(url, onSlow) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
-    xhr.timeout = 60000;
+    xhr.timeout = 120000;
     const slowTimer = setTimeout(() => { if (onSlow) onSlow(); }, 10000);
     xhr.onload = () => {
       clearTimeout(slowTimer);
@@ -709,7 +722,7 @@ function xhrGet(url, onSlow) {
   });
 }
 
-async function safeFetch(url, retries = 2, onSlow) {
+async function safeFetch(url, retries = 3, onSlow) {
   for (let i = 0; i < retries; i++) {
     try {
       const json = await xhrGet(url, i === 0 ? onSlow : null);
@@ -717,7 +730,7 @@ async function safeFetch(url, retries = 2, onSlow) {
       throw new Error(json.error || 'Server error');
     } catch (err) {
       if (i === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 1500));
     }
   }
 }
@@ -734,8 +747,8 @@ async function loadData() {
       document.getElementById('errMsg').textContent = '⏳ GAS is starting up — please wait…';
     };
     const [stockJson, entriesJson] = await Promise.all([
-      safeFetch(`${GAS_URL}?action=getCurrentStock`, 2, slowMsg),
-      safeFetch(`${GAS_URL}?action=getAllEntries`, 2, slowMsg)
+      safeFetch(`${GAS_URL}?action=getCurrentStock`, 3, slowMsg),
+      safeFetch(`${GAS_URL}?action=getAllEntries`, 3, slowMsg)
     ]);
     document.getElementById('errBanner').style.display = 'none';
     stockRows = stockJson.rows || [];
