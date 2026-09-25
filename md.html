@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Stock — My Dream Foods Limited</title>
+<title>STOCK — My Dream Foods</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -330,7 +330,7 @@
 <div class="header">
   <div class="header-mark">🏭</div>
   <div>
-    <h1>Stock MD</h1>
+    <h1>Stock</h1>
     <p>My Dream Foods Limited</p>
   </div>
   <span class="header-pill" id="entryTypePill" style="display:none;">ENTRY FORM</span>
@@ -662,7 +662,11 @@
   async function refreshStockOutStock() {
     if (!isStockOutEntry()) return;
     try {
-      const json = await safeFetch(`${GAS_URL}?action=getCurrentStock`, 3);
+      // Always bypass the server's cache here — this decides which
+      // products a Stock Out user is even allowed to enter, so it must
+      // reflect Opening Stock/Stock In entries that were just saved
+      // moments ago, not a stale snapshot from before they were saved.
+      const json = await safeFetch(`${GAS_URL}?action=getCurrentStock&nocache=1`, 3);
       stockOutMap = {};
       (json.rows || []).forEach(r => {
         stockOutMap[stockKey(r.segment, r.product)] = Number(r.quantity) || 0;
