@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>STOCK — My Dream Foods</title>
+<title>Production Planning — My Dream Foods</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -330,7 +330,7 @@
 <div class="header">
   <div class="header-mark">🏭</div>
   <div>
-    <h1>Stock</h1>
+    <h1>Production Planning</h1>
     <p>My Dream Foods Limited</p>
   </div>
   <span class="header-pill" id="entryTypePill" style="display:none;">ENTRY FORM</span>
@@ -358,7 +358,7 @@
       <div class="g3">
         <div class="field">
           <label>Date <span class="req">*</span></label>
-          <input type="date" id="date"/>
+          <input type="date" id="date" onchange="onDateChange()"/>
         </div>
         <div class="field" style="grid-column: span 2;">
           <label>Name <span class="req">*</span></label>
@@ -418,7 +418,10 @@
 
       <div class="summary-bar">
         <span class="summary-count" id="summaryCount">0 products selected</span>
-        <span class="summary-total">Total Quantity: <span id="summaryTotal">0</span></span>
+        <div style="display:flex;align-items:center;gap:18px;">
+          <span class="summary-total" id="summaryAvailWrap" style="display:none;font-size:13px;color:var(--accent);">Total Available Stock: <span id="summaryAvailTotal" style="font-size:15px;">0</span></span>
+          <span class="summary-total">Total Quantity: <span id="summaryTotal">0</span></span>
+        </div>
       </div>
     </div>
 
@@ -619,12 +622,26 @@
   // Each person's Entry Type (from the User sheet's Department column)
   // decides which tab their submissions save to: Opening Stock, Stock Out
   // or Stock In. When it's "Stock Out", the product list is narrowed to
-  // only products with stock left (per the "Current Stock" sheet — a
-  // live, sheet-formula-maintained running balance), and each row's
+  // only products with stock left FOR THE SELECTED DATE, and each row's
   // Quantity input is capped at whatever remains.
+  //
+  // This is deliberately NOT read from the "Current Stock" sheet (a single
+  // running total with no date dimension) — it's computed the same way the
+  // dashboard's "Old Stock" view computes it, straight from the raw
+  // Opening Stock / Stock In / Stock Out tabs, filtered to the Date field
+  // above: Available = Opening Stock(date) + Stock In(date) − Stock Out(date).
   let currentEntryType = '';
-  let stockOutMap    = {}; // "segment||product" → current Quantity from Current Stock sheet
+  let stockOutMap    = {}; // "segment||product" → available quantity for the selected date
   let stockLoaded      = false;
+
+  // Matches Code.gs's isoToDDMMYYYY() — the Date field is a native
+  // <input type="date">, which always gives "yyyy-mm-dd"; entries in the
+  // sheet are stored as "dd/MM/yyyy", so this converts one to the other
+  // with plain string splitting (no Date object, no timezone involved).
+  function isoToDDMMYYYY(iso) {
+    const m = String(iso || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso || '').trim();
+  }
 
   // Tolerant of variants people actually put in the User sheet's
   // Department column (e.g. "Stock Out Entry", "Opening Stock Entry",
@@ -661,23 +678,44 @@
 
   async function refreshStockOutStock() {
     if (!isStockOutEntry()) return;
+    const dateStr = isoToDDMMYYYY(document.getElementById('date').value);
+    if (!dateStr) { stockOutMap = {}; stockLoaded = false; renderProductTable(); return; }
     try {
       // Always bypass the server's cache here — this decides which
       // products a Stock Out user is even allowed to enter, so it must
-      // reflect Opening Stock/Stock In entries that were just saved
-      // moments ago, not a stale snapshot from before they were saved.
-      const json = await safeFetch(`${GAS_URL}?action=getCurrentStock&nocache=1`, 3);
-      stockOutMap = {};
+      // reflect Opening Stock/Stock In/Stock Out entries that were just
+      // saved moments ago, not a stale snapshot from before they were saved.
+      const json = await safeFetch(`${GAS_URL}?action=getAllEntries&nocache=1`, 3);
+      const sums = {}; // key → { opStock, stockIn, stockOut }
       (json.rows || []).forEach(r => {
-        stockOutMap[stockKey(r.segment, r.product)] = Number(r.quantity) || 0;
+        if (r.date !== dateStr) return;
+        const key = stockKey(r.segment, r.product);
+        if (!sums[key]) sums[key] = { opStock: 0, stockIn: 0, stockOut: 0 };
+        const qty = Number(r.quantity) || 0;
+        if (r.entryType === 'Opening Stock') sums[key].opStock += qty;
+        else if (r.entryType === 'Stock In')  sums[key].stockIn += qty;
+        else if (r.entryType === 'Stock Out') sums[key].stockOut += qty;
+      });
+      stockOutMap = {};
+      Object.keys(sums).forEach(key => {
+        const s = sums[key];
+        stockOutMap[key] = s.opStock + s.stockIn - s.stockOut;
       });
       stockLoaded = true;
     } catch (e) {
       stockOutMap = {};
       stockLoaded = false;
-      toast('Could not load current stock — ' + e.message, 'fail');
+      toast('Could not load stock for that date — ' + e.message, 'fail');
     }
     renderProductTable();
+  }
+
+  // Availability for Stock Out is date-scoped (see refreshStockOutStock),
+  // so changing the Date field must re-fetch it — otherwise Stock Out
+  // would keep showing whatever date was available at page load / last
+  // Name selection.
+  function onDateChange() {
+    if (isStockOutEntry()) refreshStockOutStock();
   }
 
   // ── Name → autofill Email + Entry Type (hidden) ───────
@@ -845,6 +883,7 @@
 
   // ── Product table (all products at once) ────────────────
   let qtyMap = {}; // "segment||product" → quantity entered (persists across filtering/search)
+  let visibleAvailTotal = 0; // sum of Avail across whatever's currently shown (Stock Out only) — for the summary bar
 
   function renderProductTable() {
     const body       = document.getElementById('ptableBody');
@@ -854,6 +893,7 @@
 
     if (!nameChosen) {
       body.innerHTML = '<tr><td colspan="3"><div class="ptable-empty">Select your name to load products</div></td></tr>';
+      visibleAvailTotal = 0;
       updateSummary();
       return;
     }
@@ -865,6 +905,13 @@
     if (segFilter) list = list.filter(p => p.segment === segFilter);
     if (search) list = list.filter(p => p.product.toLowerCase().includes(search) || p.segment.toLowerCase().includes(search));
     list.sort((a, b) => a.segment.localeCompare(b.segment) || a.product.localeCompare(b.product));
+
+    // Total Available Stock — for the date currently selected, across
+    // whatever's visible after the search/segment filters above (so it
+    // matches what the user is actually looking at, not the whole catalog).
+    visibleAvailTotal = isStockOutEntry()
+      ? list.reduce((sum, p) => sum + availableStockFor(p.segment, p.product), 0)
+      : 0;
 
     if (!list.length) {
       body.innerHTML = `<tr><td colspan="3"><div class="ptable-empty">${
@@ -932,6 +979,14 @@
     document.getElementById('summaryCount').textContent = `${keys.length} product${keys.length === 1 ? '' : 's'} selected`;
     document.getElementById('summaryTotal').textContent = total;
     document.getElementById('submitBtn').disabled = keys.length === 0 || !document.getElementById('name').value;
+
+    const availWrap = document.getElementById('summaryAvailWrap');
+    if (isStockOutEntry() && document.getElementById('name').value) {
+      availWrap.style.display = '';
+      document.getElementById('summaryAvailTotal').textContent = visibleAvailTotal.toLocaleString('en-IN');
+    } else {
+      availWrap.style.display = 'none';
+    }
   }
 
   // Posts ALL entries to the backend in one batch request. The server
