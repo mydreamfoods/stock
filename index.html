@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Stock Dashboard — My Dream Foods Limited</title>
+<title>Production Dashboard — My Dream Foods</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -326,13 +326,13 @@
   <button class="btn-sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Show/hide sidebar">☰</button>
   <span class="topbar-logo">🏭</span>
   <div>
-    <h1>MD Stock Dashboard</h1>
+    <h1>Production Dashboard</h1>
     <p>My Dream Foods Limited</p>
   </div>
   <div class="topbar-right">
     <span id="lastRefresh"></span>
-    <a class="btn-form-link" href="https://mydreamfoods.github.io/stock/md.html" target="_blank">+ New Entry</a>
-    <button class="btn-refresh" onclick="loadData()">⟳ Refresh</button>
+    <a class="btn-form-link" href="https://mydreamfoods.github.io/productionplan/productionplanningform.html" target="_blank">+ New Entry</a>
+    <button class="btn-refresh" onclick="loadData(true)">⟳ Refresh</button>
   </div>
 </div>
 
@@ -368,7 +368,7 @@
   <!-- Error -->
   <div class="err-banner" id="errBanner">
     <span id="errMsg">Error loading data</span>
-    <button class="btn-reset-filter" style="margin-left:auto;" onclick="loadData()">Retry</button>
+    <button class="btn-reset-filter" style="margin-left:auto;" onclick="loadData(true)">Retry</button>
   </div>
 
   <!-- ═══ CURRENT STOCK VIEW ═══ -->
@@ -606,6 +606,7 @@
           <tbody id="entriesBody">
             <tr><td colspan="6"><div class="state-box"><div class="spin"></div>Loading data…</div></td></tr>
           </tbody>
+          <tfoot id="entriesFoot"></tfoot>
         </table>
       </div>
     </div>
@@ -736,7 +737,7 @@ async function safeFetch(url, retries = 3, onSlow) {
 }
 
 // ── Load ──────────────────────────────────────────────
-async function loadData() {
+async function loadData(forceRefresh) {
   document.getElementById('errBanner').style.display = 'none';
   setStockLoading();
   setEntriesLoading();
@@ -744,11 +745,15 @@ async function loadData() {
     const slowMsg = () => {
       const eb = document.getElementById('errBanner');
       eb.style.display = 'flex';
-      document.getElementById('errMsg').textContent = '⏳ GAS is starting up — please wait…';
+      document.getElementById('errMsg').textContent = '⏳ Still loading — the sheet can take a bit longer when it\'s busy…';
     };
+    // The server caches Current Stock / All Entries for ~30s so most loads
+    // are instant — pass nocache=1 only on an explicit Refresh click (or a
+    // Retry after an error) so that click reliably reflects the latest data.
+    const nocacheQS = forceRefresh ? '&nocache=1' : '';
     const [stockJson, entriesJson] = await Promise.all([
-      safeFetch(`${GAS_URL}?action=getCurrentStock`, 3, slowMsg),
-      safeFetch(`${GAS_URL}?action=getAllEntries`, 3, slowMsg)
+      safeFetch(`${GAS_URL}?action=getCurrentStock${nocacheQS}`, 3, slowMsg),
+      safeFetch(`${GAS_URL}?action=getAllEntries${nocacheQS}`, 3, slowMsg)
     ]);
     document.getElementById('errBanner').style.display = 'none';
     stockRows = stockJson.rows || [];
@@ -1389,9 +1394,11 @@ function renderEntries() {
   });
 
   const tbody = document.getElementById('entriesBody');
+  const foot  = document.getElementById('entriesFoot');
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="state-box">No entries for this view</div></td></tr>';
     document.getElementById('entriesRowCount').textContent = '0 rows';
+    foot.innerHTML = '';
     return;
   }
   document.getElementById('entriesRowCount').textContent = rows.length + ' rows';
@@ -1404,15 +1411,26 @@ function renderEntries() {
       <td>${deptBadge(r.entryType)}</td>
       <td class="num">${fmt(r.quantity)}</td>
     </tr>`).join('');
+
+  // Total Qty for whatever's currently shown — respects the active filters
+  // and whichever sidebar tab (All / Opening Stock / Stock In / Stock Out)
+  // is selected, same as the Current Stock table's TOTAL row.
+  const totalQty = rows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  foot.innerHTML = `<tr>
+    <td colspan="5" style="text-align:right;">TOTAL</td>
+    <td class="num" style="font-weight:700;">${fmt(totalQty)}</td>
+  </tr>`;
 }
 
 function setEntriesLoading() {
   document.getElementById('entriesBody').innerHTML = `<tr><td colspan="6"><div class="state-box"><div class="spin"></div>Loading data…</div></td></tr>`;
   document.getElementById('entriesRowCount').textContent = '—';
+  document.getElementById('entriesFoot').innerHTML = '';
 }
 function setEntriesEmpty(msg) {
   document.getElementById('entriesBody').innerHTML = `<tr><td colspan="6"><div class="state-box">${msg}</div></td></tr>`;
   document.getElementById('entriesRowCount').textContent = '0 rows';
+  document.getElementById('entriesFoot').innerHTML = '';
 }
 
 // ── Init ───────────────────────────────────────────────
